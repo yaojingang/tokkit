@@ -498,6 +498,14 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
 
     lines.extend(
         [
+            "Trend (total tokens):",
+            _render_trend_chart(
+                by_date_rows,
+                label_field="local_date",
+                value_field="total_tokens",
+                width=28,
+            ),
+            "",
             "By date:",
             _render_table(
                 headers=["Date", "Total", "Input", "Output", "Cached", "Reasoning", "Credits", "Records"],
@@ -962,6 +970,31 @@ def _render_table(
         parts.append(format_row(row))
     parts.append(separator)
     return "\n".join(parts)
+
+
+def _render_trend_chart(
+    rows: Iterable[sqlite3.Row | dict[str, object]],
+    *,
+    label_field: str,
+    value_field: str,
+    width: int = 24,
+) -> str:
+    chart_rows = [row for row in rows]
+    if not chart_rows:
+        return "(no records)"
+
+    max_value = max(int(row[value_field]) for row in chart_rows)
+    if max_value <= 0:
+        return "(no records)"
+
+    rendered: list[str] = []
+    for row in reversed(chart_rows):
+        label = str(row[label_field])
+        value = int(row[value_field])
+        bar_length = max(1, round((value / max_value) * width)) if value > 0 else 0
+        bar = "#" * bar_length
+        rendered.append(f"{label} | {bar.ljust(width)} {format_int(value)}")
+    return "\n".join(rendered)
 
 
 def _resolve_date_alias(raw: str, tz) -> str:

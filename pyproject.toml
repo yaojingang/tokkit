@@ -21,6 +21,7 @@ classifiers = [
 [project.scripts]
 tokstat = "tokstat.cli:main"
 tokledger = "tokstat.cli:main"
+tok = "tokstat.tok:main"
 
 [build-system]
 requires = ["setuptools>=68"]

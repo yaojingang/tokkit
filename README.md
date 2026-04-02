@@ -4,7 +4,7 @@ TokLedger is a local-first token ledger for desktop AI coding tools.
 
 It pulls together fragmented usage from terminal agents, IDE assistants, and
 local AI helpers into one consistent daily view. The CLI is `tokstat`, and the
-optional shell shortcut is `tok`.
+operator shortcut is `tok`.
 
 TokLedger 是一个面向桌面 AI 编码工具的本地 Token 台账。
 
@@ -25,6 +25,8 @@ What it does well:
 - explicit `partial` and `estimated` labels where it does not
 - multi-tool daily reports by date, terminal, model, source, and client
 - shell-first workflow for people living in terminal and Kaku
+- report commands that auto-scan before rendering
+- built-in ASCII trend charts for multi-day reports
 
 ## Supported sources
 
@@ -71,6 +73,10 @@ That installs:
 
 - `tokstat`
 - `tokledger`
+- `tok`
+
+If you already had an older editable install, rerun `python3 -m pip install -e .`
+to pick up the `tok` entry point.
 
 ## Quick start
 
@@ -78,6 +84,13 @@ Scan all supported adapters:
 
 ```bash
 tokstat scan-all --timezone Asia/Shanghai
+```
+
+Or use the operator shortcut, which auto-scans before rendering reports:
+
+```bash
+tok today
+tok last 7
 ```
 
 Show today:
@@ -110,6 +123,7 @@ Daily report:
 
 Range report:
 
+- total-token trend chart
 - date-merged summary
 - by terminal
 - by model
@@ -132,6 +146,14 @@ tok today
 tok last 7
 tok clients month
 tok scan warp
+```
+
+`tok` defaults to auto-scan before report commands and shows a lightweight
+loading indicator while scanning. You can disable or scope that behavior with:
+
+```bash
+TOK_AUTO_SCAN_BEFORE_REPORTS=0 tok today
+TOK_AUTO_SCAN_TARGET=codex tok last 7
 ```
 
 ## Automatic mode on macOS
