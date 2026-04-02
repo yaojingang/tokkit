@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+[Product brief](docs/PRODUCT_BRIEF.md) | [Positioning & roadmap](docs/POSITIONING_AND_ROADMAP.md) | [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
+
 TokLedger is a local-first token ledger for desktop AI coding tools. It scans
 local usage logs, proxy responses, and conversation aggregates from tools such
 as Codex, Warp, Kaku, and CodeBuddy; normalizes them into `exact`, `partial`,
@@ -252,4 +254,6 @@ TokLedger should be presented as:
 Repository planning and release packaging notes live in:
 
 - `docs/PRODUCT_BRIEF.md`
+- `docs/POSITIONING_AND_ROADMAP.md`
+- `docs/POSITIONING_AND_ROADMAP.zh-CN.md`
 - `docs/GITHUB_PUBLISH_PLAN.md`

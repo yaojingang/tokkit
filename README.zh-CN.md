@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+[产品简介](docs/PRODUCT_BRIEF.md) | [Positioning & roadmap](docs/POSITIONING_AND_ROADMAP.md) | [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
+
 TokLedger 是一个面向桌面 AI 编码工具的本地优先 Token 台账。它会扫描
 Codex、Warp、Kaku、CodeBuddy 等工具在本机留下的使用日志、代理响应和
 会话级聚合数据，把这些来源统一归一为 `exact`、`partial`、`estimated`
@@ -239,3 +241,10 @@ base_url = "http://127.0.0.1:8765"
 ```
 
 代理会转发请求，并从上游响应里记录 usage。
+
+## 进一步阅读
+
+- `docs/PRODUCT_BRIEF.md`
+- `docs/POSITIONING_AND_ROADMAP.md`
+- `docs/POSITIONING_AND_ROADMAP.zh-CN.md`
+- `docs/GITHUB_PUBLISH_PLAN.md`
