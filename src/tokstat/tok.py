@@ -51,6 +51,7 @@ Files / 文件:
 
 Pricing / 定价:
   tok pricing               Show local pricing profiles / 查看本地价格档位
+                            Marks built-in vs override / 标明 built-in 或 override 来源
   tok pricing json          Show pricing profiles as JSON / 以 JSON 输出价格档位
 
 Auto scan / 自动扫描:

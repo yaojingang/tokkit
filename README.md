@@ -163,9 +163,28 @@ Cost notes:
 
 - `Est.$` is a local API cost estimate based on built-in model pricing profiles
 - `tok pricing` shows the current built-in price table used by `Est.$`
+- if `~/.tokstat/pricing.json` exists, TokLedger merges it over the built-in table
+- `tok pricing` marks every row as `built-in` or `override`
 - `Credits` remains separate for sources like Warp that expose vendor credits
 - partial sources may show `Input/Output/Cached/Reasoning` as `-` and `Est.$` as `-`
   when only conversation-level totals are available
+
+Override example:
+
+```json
+{
+  "GPT-5.4": {
+    "input_per_million": 2.7,
+    "cached_input_per_million": 0.27,
+    "output_per_million": 16.0
+  },
+  "Claude Sonnet 4.6": {
+    "input": 3.2,
+    "cached_input": 0.32,
+    "output": 16.0
+  }
+}
+```
 
 ## Automatic mode on macOS
 

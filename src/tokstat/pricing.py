@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -11,13 +15,29 @@ class ModelPrice:
     output_per_million: float
 
 
+@dataclass(frozen=True)
+class PriceProfile:
+    model: str
+    pricing: ModelPrice
+    source: str
+
+
+@dataclass(frozen=True)
+class PriceBookResolution:
+    profiles: dict[str, PriceProfile]
+    override_path: Path
+    override_loaded: bool
+    override_error: str | None = None
+
+
 _PAREN_SUFFIX_RE = re.compile(r"\s*(\([^)]*\))\s*$")
 _CLAUDE_PREFIX_RE = re.compile(r"^claude\s+(sonnet|opus|haiku)\s+([0-9.]+)(.*)$", re.IGNORECASE)
 _CLAUDE_SUFFIX_RE = re.compile(r"^claude\s+([0-9.]+)\s+(sonnet|opus|haiku)(.*)$", re.IGNORECASE)
 _GPT_RE = re.compile(r"^gpt[- ]?([0-9.]+)(?:[- ]?(mini|nano|codex))?(.*)$", re.IGNORECASE)
+DEFAULT_PRICING_PATH = Path.home() / ".tokstat" / "pricing.json"
 
 
-PRICE_BOOK: dict[str, ModelPrice] = {
+BUILTIN_PRICE_BOOK: dict[str, ModelPrice] = {
     "GPT-5.4": ModelPrice(2.50, 0.25, 15.00),
     "GPT-5.4 Mini": ModelPrice(0.75, 0.075, 4.50),
     "GPT-5.4 Nano": ModelPrice(0.20, 0.02, 1.25),
@@ -40,8 +60,41 @@ PRICE_BOOK: dict[str, ModelPrice] = {
 }
 
 
-def iter_price_book() -> list[tuple[str, ModelPrice]]:
-    return list(PRICE_BOOK.items())
+def resolve_price_book(pricing_path: Path | None = None) -> PriceBookResolution:
+    override_path = Path(
+        os.environ.get("TOKSTAT_PRICING_PATH", str(pricing_path or DEFAULT_PRICING_PATH))
+    ).expanduser()
+    profiles: dict[str, PriceProfile] = {
+        model: PriceProfile(model=model, pricing=pricing, source="built-in")
+        for model, pricing in BUILTIN_PRICE_BOOK.items()
+    }
+
+    if not override_path.exists():
+        return PriceBookResolution(
+            profiles=profiles,
+            override_path=override_path,
+            override_loaded=False,
+        )
+
+    try:
+        for model, pricing in _load_override_profiles(override_path).items():
+            profiles[model] = PriceProfile(model=model, pricing=pricing, source="override")
+        return PriceBookResolution(
+            profiles=profiles,
+            override_path=override_path,
+            override_loaded=True,
+        )
+    except Exception as exc:
+        return PriceBookResolution(
+            profiles=profiles,
+            override_path=override_path,
+            override_loaded=False,
+            override_error=str(exc),
+        )
+
+
+def iter_price_book(resolution: PriceBookResolution | None = None) -> list[PriceProfile]:
+    return list((resolution or resolve_price_book()).profiles.values())
 
 
 def normalize_model_display(model: str | None, provider: str | None = None) -> str:
@@ -77,6 +130,7 @@ def estimate_cost_usd(
     input_tokens: int | None,
     cached_input_tokens: int | None,
     output_tokens: int | None,
+    pricing_resolution: PriceBookResolution | None = None,
 ) -> float | None:
     if measurement_method != "exact":
         return None
@@ -89,9 +143,11 @@ def estimate_cost_usd(
 
     normalized = normalize_model_display(model, provider)
     lookup_name = _strip_parenthetical_suffix(normalized)
-    pricing = PRICE_BOOK.get(lookup_name)
-    if pricing is None:
+    resolution = pricing_resolution or resolve_price_book()
+    profile = resolution.profiles.get(lookup_name)
+    if profile is None:
         return None
+    pricing = profile.pricing
 
     cached_billable = min(cached_input, total_input)
     uncached_input = max(total_input - cached_billable, 0)
@@ -105,6 +161,49 @@ def estimate_cost_usd(
         + (total_output / 1_000_000) * pricing.output_per_million
     )
     return round(estimate, 8)
+
+
+def _load_override_profiles(path: Path) -> dict[str, ModelPrice]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("pricing override must be a JSON object")
+
+    raw_profiles = payload.get("profiles", payload)
+    if not isinstance(raw_profiles, dict):
+        raise ValueError("pricing override 'profiles' must be an object")
+
+    profiles: dict[str, ModelPrice] = {}
+    for model, raw_entry in raw_profiles.items():
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("pricing override keys must be non-empty model names")
+        if not isinstance(raw_entry, dict):
+            raise ValueError(f"pricing override for {model!r} must be an object")
+        profiles[model.strip()] = ModelPrice(
+            input_per_million=_read_required_float(raw_entry, "input_per_million", alias="input"),
+            cached_input_per_million=_read_optional_float(raw_entry, "cached_input_per_million", alias="cached_input"),
+            output_per_million=_read_required_float(raw_entry, "output_per_million", alias="output"),
+        )
+    return profiles
+
+
+def _read_required_float(payload: dict[str, Any], key: str, *, alias: str | None = None) -> float:
+    if key in payload:
+        return float(payload[key])
+    if alias and alias in payload:
+        return float(payload[alias])
+    raise ValueError(f"missing required field '{key}'")
+
+
+def _read_optional_float(payload: dict[str, Any], key: str, *, alias: str | None = None) -> float | None:
+    if key in payload:
+        value = payload[key]
+    elif alias and alias in payload:
+        value = payload[alias]
+    else:
+        return None
+    if value is None:
+        return None
+    return float(value)
 
 
 def _strip_parenthetical_suffix(value: str) -> str:

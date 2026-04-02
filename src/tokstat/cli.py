@@ -13,7 +13,7 @@ from .db import connect_db
 from .ingest_codebuddy import scan_codebuddy
 from .ingest_codex import scan_codex
 from .ingest_warp import scan_warp
-from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display
+from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
 from .utils import DEFAULT_DB_PATH, format_float, format_int, get_timezone, today_string
 
@@ -796,19 +796,24 @@ def render_clients_report(
 
 
 def render_pricing_report(*, json_mode: bool) -> str:
+    resolution = resolve_price_book()
     rows = [
         {
-            "model": model,
-            "input_per_million": pricing.input_per_million,
-            "cached_input_per_million": pricing.cached_input_per_million,
-            "output_per_million": pricing.output_per_million,
+            "model": profile.model,
+            "input_per_million": profile.pricing.input_per_million,
+            "cached_input_per_million": profile.pricing.cached_input_per_million,
+            "output_per_million": profile.pricing.output_per_million,
+            "source": profile.source,
         }
-        for model, pricing in iter_price_book()
+        for profile in iter_price_book(resolution)
     ]
     if json_mode:
         return json.dumps(
             {
                 "profiles": rows,
+                "override_path": str(resolution.override_path),
+                "override_loaded": resolution.override_loaded,
+                "override_error": resolution.override_error,
                 "notes": {
                     "estimate_column": "Est.$ is a local estimate, not vendor billing.",
                     "unit": "USD per 1M tokens",
@@ -823,15 +828,27 @@ def render_pricing_report(*, json_mode: bool) -> str:
             "Pricing profiles for Est.$",
             "",
             "Local estimate only. Unit: USD per 1M tokens.",
+            (
+                f"Override file: {resolution.override_path} "
+                f"({'loaded' if resolution.override_loaded else 'not loaded'})"
+            ),
+            (
+                f"Override status: fallback to built-in ({resolution.override_error})"
+                if resolution.override_error
+                else "Override status: built-in + override merge"
+                if resolution.override_loaded
+                else "Override status: built-in only"
+            ),
             "",
             _render_table(
-                headers=["Model", "Input $/1M", "Cached $/1M", "Output $/1M"],
+                headers=["Model", "Input $/1M", "Cached $/1M", "Output $/1M", "Source"],
                 rows=[
                     [
                         row["model"],
                         format_float(row["input_per_million"], precision=3),
                         format_float(row["cached_input_per_million"], precision=3),
                         format_float(row["output_per_million"], precision=3),
+                        row["source"],
                     ]
                     for row in rows
                 ],
@@ -1042,6 +1059,7 @@ def _model_label(model: str | None, provider: str | None) -> str:
 
 
 def _enrich_usage_rows(rows: Iterable[sqlite3.Row]) -> list[dict[str, object]]:
+    pricing_resolution = resolve_price_book()
     enriched: list[dict[str, object]] = []
     for row in rows:
         item = dict(row)
@@ -1053,6 +1071,7 @@ def _enrich_usage_rows(rows: Iterable[sqlite3.Row]) -> list[dict[str, object]]:
             input_tokens=int(item.get("input_tokens") or 0),
             cached_input_tokens=int(item.get("cached_input_tokens") or 0),
             output_tokens=int(item.get("output_tokens") or 0),
+            pricing_resolution=pricing_resolution,
         )
         enriched.append(item)
     return enriched
