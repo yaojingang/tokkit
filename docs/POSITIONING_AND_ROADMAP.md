@@ -117,21 +117,44 @@ TokLedger should emphasize:
 
 ## Near-term roadmap
 
-### P0: Strengthen the wedge
+### P0: Make the ledger trustworthy on day one
 
-- `tok doctor` for adapter status, coverage, and failure explanations
-- `tok setup` for guided local proxy and adapter setup
-- Support matrix docs for every client with exact/partial/estimated labeling
-- Better workspace and repo attribution
-- More coding-tool adapters, especially Claude Code, Cursor, Windsurf, and
-  ChatGPT desktop where feasible
+- `tok doctor` should explain adapter health, coverage level, last successful
+  scan, and why usage is missing or partial
+- `tok setup` should provide guided onboarding for common log-based adapters
+  and local proxy flows, so a new user can get to a useful report quickly
+- The support matrix should become a product surface, not just documentation:
+  each client should clearly show `exact`, `partial`, `estimated`, or
+  `untracked`, plus setup path and known limits
+- Workspace and repository attribution should become first-class, so users can
+  answer “which project consumed this?” without manual reconstruction
+- Adapter coverage should expand in priority order around real AI coding
+  workflows, especially Claude Code, Cursor, Windsurf, ChatGPT desktop, and
+  major VS Code assistant paths where feasible
 
-### P1: Make accounting operational
+Success bar for P0:
 
-- Budgets by day, week, month, client, and model
-- Alerts for unusual spend, rapid context growth, or budget breaches
-- Better de-duplication when multiple measurement paths observe the same usage
-- Export improvements for CSV, JSON, Markdown, and scheduled summaries
+- a new user can install TokLedger, connect the tools they already use, and
+  trust the first report they see
+
+### P1: Turn accounting into control
+
+- Budgets should work across day, week, and month, and roll up by model,
+  client, terminal, workspace, and machine
+- Alerts should detect budget breaches, unusual spend spikes, rapid context
+  growth, and weak cache efficiency before cost quietly drifts
+- Attribution and de-duplication should become a dedicated accounting layer
+  that reconciles overlapping logs, proxies, and client views into one
+  explainable source of truth
+- Cost breakdowns should stay explainable: uncached input, cached input,
+  output, credits, pricing overrides, and method of measurement
+- Exports and scheduled summaries should support both personal review and
+  lightweight finance handoff without turning the product into a heavy
+  dashboard
+
+Success bar for P1:
+
+- users can move from “I can see my usage” to “I can manage and reduce it”
 
 ### P2: Expand the surface carefully
 
