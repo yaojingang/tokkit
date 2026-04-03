@@ -16,7 +16,13 @@ In one sentence:
   coding tool usage into one honest, terminal-first account of tokens and
   cost.
 
-![TokKit terminal demo](docs/assets/tokkit-terminal-demo.svg)
+Example: `tok last 7`
+
+![TokKit range report example](docs/assets/tokkit-range-report-example.svg)
+
+Example: `tok help`
+
+![TokKit help example](docs/assets/tokkit-help-example.svg)
 
 ## Why it is different
 

@@ -15,7 +15,13 @@ Codex、Warp、Kaku、CodeBuddy 等桌面工作流，把分散在本机日志、
 - TokKit 是一个轻量化、本地优先、终端优先的 AI 编码工具总账，把碎片化
   usage 变成一份诚实、可解释的 token 和成本台账。
 
-![TokKit terminal demo](docs/assets/tokkit-terminal-demo.svg)
+示例：`tok last 7`
+
+![TokKit range report example](docs/assets/tokkit-range-report-example.svg)
+
+示例：`tok help`
+
+![TokKit help example](docs/assets/tokkit-help-example.svg)
 
 ## 它和通用方案有什么不同
 
