@@ -16,13 +16,14 @@ from typing import Iterable
 from .budget import resolve_budget_config, write_budget_template
 from .clients import CLIENT_DEFINITIONS, detect_installed_clients, logical_client_for_usage_row
 from .db import connect_db
+from .ingest_augment import scan_augment
 from .ingest_claude_code import scan_claude_code
 from .ingest_codebuddy import scan_codebuddy
 from .ingest_codex import scan_codex
 from .ingest_warp import scan_warp
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
-from .utils import DEFAULT_DB_PATH, default_db_path, default_log_dir, default_report_dir, format_float, format_int, get_timezone, resolve_app_home, today_string
+from .utils import DEFAULT_DB_PATH, default_augment_capture_path, default_db_path, default_log_dir, default_report_dir, format_float, format_int, get_timezone, resolve_app_home, today_string
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,6 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     claude_cmd = subparsers.add_parser("scan-claude-code", help="Ingest local Claude Code usage.")
     claude_cmd.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
+
+    augment_cmd = subparsers.add_parser("scan-augment", help="Ingest locally captured Augment usage.")
+    augment_cmd.add_argument("--capture-file", type=Path, default=default_augment_capture_path())
 
     codebuddy_cmd = subparsers.add_parser("scan-codebuddy", help="Estimate CodeBuddy usage from local task history.")
     codebuddy_cmd.add_argument(
@@ -67,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     all_cmd = subparsers.add_parser("scan-all", help="Run all supported local ingesters together.")
     all_cmd.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
     all_cmd.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
+    all_cmd.add_argument("--augment-capture-file", type=Path, default=default_augment_capture_path())
     all_cmd.add_argument(
         "--codebuddy-tasks-root",
         type=Path,
@@ -181,6 +186,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"claude-code scan complete: files={stats.files_scanned} token_events={stats.records_seen}")
             return 0
 
+        if args.command == "scan-augment":
+            stats = scan_augment(conn, capture_file=args.capture_file, tz=tz)
+            print(f"augment scan complete: lines={stats.lines_scanned} records={stats.records_emitted}")
+            return 0
+
         if args.command == "scan-codebuddy":
             stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
             print(
@@ -205,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "scan-all":
             codex_stats = scan_codex(conn, codex_home=args.codex_home, tz=tz)
             claude_stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
+            augment_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
             codebuddy_stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
             warp_stats = scan_warp(
                 conn,
@@ -218,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"codex_events={codex_stats.records_seen} "
                 f"claude_files={claude_stats.files_scanned} "
                 f"claude_events={claude_stats.records_seen} "
+                f"augment_lines={augment_stats.lines_scanned} "
+                f"augment_records={augment_stats.records_emitted} "
                 f"codebuddy_tasks={codebuddy_stats.tasks_seen} "
                 f"codebuddy_emitted={codebuddy_stats.records_emitted} "
                 f"warp_conversations={warp_stats.conversations_seen} "

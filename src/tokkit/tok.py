@@ -39,9 +39,10 @@ Client coverage / 客户端汇总:
 Scans / 扫描:
   tok scan codex            Manually scan Codex now / 立即手动扫描 Codex
   tok scan claude-code      Manually scan Claude Code now / 立即手动扫描 Claude Code
+  tok scan augment          Manually scan Augment capture logs now / 立即手动扫描 Augment 捕获日志
   tok scan codebuddy        Manually scan CodeBuddy estimates now / 立即手动扫描 CodeBuddy 估算数据
   tok scan warp             Manually scan Warp now / 立即手动扫描 Warp
-  tok scan all              Manually scan Codex + Claude Code + CodeBuddy + Warp now / 立即手动扫描 Codex、Claude Code、CodeBuddy 和 Warp
+  tok scan all              Manually scan Codex + Claude Code + Augment + CodeBuddy + Warp now / 立即手动扫描 Codex、Claude Code、Augment、CodeBuddy 和 Warp
 
 JSON output / JSON 输出:
   tok json today            Show today's report as JSON / 以 JSON 输出今天的报表
@@ -68,7 +69,7 @@ Budget / 预算:
 Auto scan / 自动扫描:
   report commands auto-scan before rendering / 报表命令会先自动扫描再输出
   TOK_AUTO_SCAN_BEFORE_REPORTS=0               disable auto scan / 关闭自动扫描
-  TOK_AUTO_SCAN_TARGET=all|codex|claude-code|warp|codebuddy  choose scan target / 指定扫描目标
+  TOK_AUTO_SCAN_TARGET=all|codex|claude-code|augment|warp|codebuddy  choose scan target / 指定扫描目标
 """
 
 
@@ -124,6 +125,7 @@ def _run_scan_command(args: list[str]) -> int:
         "codex": ["scan-codex"],
         "claude-code": ["scan-claude-code"],
         "claude": ["scan-claude-code"],
+        "augment": ["scan-augment"],
         "codebuddy": ["scan-codebuddy"],
         "warp": ["scan-warp"],
         "all": ["scan-all"],
@@ -290,9 +292,10 @@ def _resolve_scan_target(target: str) -> tuple[list[str] | None, str]:
         "codex": (["scan-codex"], "Codex"),
         "claude-code": (["scan-claude-code"], "Claude Code"),
         "claude": (["scan-claude-code"], "Claude Code"),
+        "augment": (["scan-augment"], "Augment"),
         "codebuddy": (["scan-codebuddy"], "CodeBuddy"),
         "warp": (["scan-warp"], "Warp"),
-        "all": (["scan-all"], "Codex + Claude Code + CodeBuddy + Warp"),
+        "all": (["scan-all"], "Codex + Claude Code + Augment + CodeBuddy + Warp"),
     }
     return mapping.get(target, (None, ""))
 

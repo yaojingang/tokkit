@@ -60,6 +60,13 @@ def default_log_dir() -> Path:
     return resolve_app_home() / "logs"
 
 
+def default_augment_capture_path() -> Path:
+    explicit = _first_env_path("TOKKIT_AUGMENT_CAPTURE_PATH", "TOKSTAT_AUGMENT_CAPTURE_PATH")
+    if explicit is not None:
+        return explicit
+    return resolve_app_home() / "augment-usage.ndjson"
+
+
 DEFAULT_DB_PATH = default_db_path()
 
 
@@ -130,4 +137,3 @@ def estimate_text_tokens(text: str) -> int:
     cjk_chars = len(_CJK_RE.findall(normalized))
     non_cjk_chars = len(_CJK_RE.sub("", normalized))
     return cjk_chars + max(1, math.ceil(non_cjk_chars / 4))
-

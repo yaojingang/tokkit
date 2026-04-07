@@ -125,6 +125,8 @@ def logical_client_for_usage_row(app: str, source: str) -> str | None:
         return "visual-studio-code"
     if app == "codex":
         return "codex"
+    if app == "augment":
+        return "augment"
     if app == "claude-code":
         return "claude-code"
     if app == "warp":
