@@ -7,7 +7,7 @@
 TokKit is the lightweight, local-first usage ledger for AI coding tools.
 It helps individual developers track tokens, cost, models, terminals, and
 clients across Codex, Claude Code, Warp, Kaku, Cursor, CodeBuddy, Augment,
-ChatGPT exports, and similar desktop workflows
+ChatGPT exports, Trae task history, and similar desktop workflows
 without requiring SDK instrumentation for log-based sources. The core CLI is
 `tokkit`, with `tok` as the operator shortcut and `tokstat` kept as a compatibility alias.
 
@@ -55,6 +55,7 @@ What TokKit emphasizes:
 - ChatGPT official data export (`conversations.json` or export zip)
 - Cursor from local sentry telemetry estimation
 - CodeBuddy from local task-history estimation
+- Trae task-history usage recovery when local `ui_messages.json` includes token fields
 
 All normalized records are stored in `~/.tokkit/usage.sqlite` by default. If an
 existing `~/.tokstat` directory is present, TokKit will continue using it
@@ -75,6 +76,7 @@ Current source behavior:
 - ChatGPT export: estimated from official exported conversation text, useful for longitudinal local accounting rather than billable usage
 - Cursor: estimated from local sentry `ex_hs2` events, useful for directional local accounting rather than billable usage
 - CodeBuddy: estimated from locally cached task text
+- Trae: exact for detected `huohuaai.huohuaai` task history entries that include `tokensIn/tokensOut` in local `ui_messages.json`; native Trae logs alone are still not enough
 - Augment: historical local logs still cannot backfill exact usage, but TokKit can capture exact usage from new Augment requests by patching the local VS Code extension at runtime and scanning `~/.tokkit/augment-usage.ndjson`
 
 ## Highlights
@@ -154,6 +156,7 @@ tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https:/
 tok budget init
 tok augment install
 tok scan chatgpt
+tok scan trae
 ```
 
 ### Manual scanning
@@ -282,6 +285,7 @@ Cost notes:
 - `tok augment install` patches the local Augment VS Code extension so new requests can emit exact usage into `~/.tokkit/augment-usage.ndjson`
 - `tok augment status` shows whether the Augment capture hook and capture file are in place
 - `tok scan augment` ingests `~/.tokkit/augment-usage.ndjson` into the SQLite ledger
+- `tok scan trae` ingests exact token fields from detected Trae task-history `ui_messages.json` files when those local task logs are available
 - `Credits` remains separate for sources like Warp that expose vendor credits
 - partial sources may show `Input/Output/Cached/Reasoning` as `-` and `Est.$` as `-`
   when only conversation-level totals are available

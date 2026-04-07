@@ -24,6 +24,7 @@ from .ingest_claude_code import scan_claude_code
 from .ingest_codebuddy import scan_codebuddy
 from .ingest_codex import scan_codex
 from .ingest_cursor import scan_cursor
+from .ingest_trae import scan_trae
 from .ingest_warp import scan_warp
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
@@ -86,6 +87,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path.home() / "Library/Application Support/Cursor/sentry/scope_v3.json",
     )
 
+    trae_cmd = subparsers.add_parser("scan-trae", help="Ingest Trae task-history usage when local token fields are present.")
+    trae_cmd.add_argument(
+        "--trae-tasks-root",
+        type=Path,
+        default=Path.home() / "Library/Application Support/Trae/User/globalStorage/huohuaai.huohuaai/tasks",
+    )
+
     warp_cmd = subparsers.add_parser("scan-warp", help="Ingest Warp AI usage.")
     warp_cmd.add_argument(
         "--warp-db",
@@ -115,6 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--cursor-sentry-scope",
         type=Path,
         default=Path.home() / "Library/Application Support/Cursor/sentry/scope_v3.json",
+    )
+    all_cmd.add_argument(
+        "--trae-tasks-root",
+        type=Path,
+        default=Path.home() / "Library/Application Support/Trae/User/globalStorage/huohuaai.huohuaai/tasks",
     )
     all_cmd.add_argument(
         "--warp-db",
@@ -273,6 +286,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
+        if args.command == "scan-trae":
+            stats = scan_trae(conn, tasks_root=args.trae_tasks_root, tz=tz)
+            print(
+                "trae scan complete: "
+                f"tasks={stats.tasks_seen} "
+                f"request_events={stats.request_events_seen} "
+                f"emitted={stats.records_emitted}"
+            )
+            return 0
+
         if args.command == "scan-warp":
             stats = scan_warp(
                 conn,
@@ -293,6 +316,7 @@ def main(argv: list[str] | None = None) -> int:
             chatgpt_stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
             codebuddy_stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
             cursor_stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
+            trae_stats = scan_trae(conn, tasks_root=args.trae_tasks_root, tz=tz)
             warp_stats = scan_warp(
                 conn,
                 warp_db=args.warp_db,
@@ -314,6 +338,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"codebuddy_emitted={codebuddy_stats.records_emitted} "
                 f"cursor_events={cursor_stats.events_seen} "
                 f"cursor_emitted={cursor_stats.records_emitted} "
+                f"trae_tasks={trae_stats.tasks_seen} "
+                f"trae_request_events={trae_stats.request_events_seen} "
+                f"trae_emitted={trae_stats.records_emitted} "
                 f"warp_conversations={warp_stats.conversations_seen} "
                 f"warp_emitted={warp_stats.records_emitted}"
             )
@@ -2079,7 +2106,7 @@ def _doctor_action_for_client(
     if client == "Cursor":
         return "run `tok scan cursor`"
     if client == "Trae":
-        return "adapter not available yet"
+        return "run `tok scan trae`"
     return "scan or configure this client"
 
 

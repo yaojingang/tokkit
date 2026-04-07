@@ -100,7 +100,11 @@ CLIENT_DEFINITIONS: tuple[ClientDefinition, ...] = (
         label="Trae",
         app_names=("Trae.app",),
         default_coverage="unavailable",
-        notes="Local logs show app activity, not token usage totals.",
+        notes=(
+            "Native Trae logs still do not expose a stable token ledger. "
+            "When huohuaai task history is present locally, TokKit can recover exact token fields "
+            "from `ui_messages.json` and ingest them."
+        ),
     ),
     ClientDefinition(
         key="codebuddy",
@@ -141,4 +145,6 @@ def logical_client_for_usage_row(app: str, source: str) -> str | None:
         return "codebuddy"
     if app == "cursor":
         return "cursor"
+    if app == "trae":
+        return "trae"
     return None

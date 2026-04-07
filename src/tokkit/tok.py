@@ -46,8 +46,9 @@ Scans / 扫描:
   tok scan chatgpt [path]   Scan ChatGPT export estimates now / 立即扫描 ChatGPT 导出估算数据
   tok scan codebuddy        Manually scan CodeBuddy estimates now / 立即手动扫描 CodeBuddy 估算数据
   tok scan cursor           Manually scan Cursor estimates now / 立即手动扫描 Cursor 估算数据
+  tok scan trae             Manually scan Trae task history now / 立即手动扫描 Trae 任务历史
   tok scan warp             Manually scan Warp now / 立即手动扫描 Warp
-  tok scan all              Manually scan Codex + Claude Code + Augment + ChatGPT export + CodeBuddy + Cursor + Warp now / 立即手动扫描 Codex、Claude Code、Augment、ChatGPT 导出、CodeBuddy、Cursor 和 Warp
+  tok scan all              Manually scan Codex + Claude Code + Augment + ChatGPT export + CodeBuddy + Cursor + Trae + Warp now / 立即手动扫描 Codex、Claude Code、Augment、ChatGPT 导出、CodeBuddy、Cursor、Trae 和 Warp
 
 JSON output / JSON 输出:
   tok json today            Show today's report as JSON / 以 JSON 输出今天的报表
@@ -74,7 +75,7 @@ Budget / 预算:
 Auto scan / 自动扫描:
   report commands auto-scan before rendering / 报表命令会先自动扫描再输出
   TOK_AUTO_SCAN_BEFORE_REPORTS=0               disable auto scan / 关闭自动扫描
-  TOK_AUTO_SCAN_TARGET=all|codex|claude-code|augment|chatgpt|warp|codebuddy|cursor  choose scan target / 指定扫描目标
+  TOK_AUTO_SCAN_TARGET=all|codex|claude-code|augment|chatgpt|warp|codebuddy|cursor|trae  choose scan target / 指定扫描目标
 """
 
 
@@ -140,6 +141,7 @@ def _run_scan_command(args: list[str]) -> int:
         "augment": ["scan-augment"],
         "codebuddy": ["scan-codebuddy"],
         "cursor": ["scan-cursor"],
+        "trae": ["scan-trae"],
         "warp": ["scan-warp"],
         "all": ["scan-all"],
     }
@@ -330,8 +332,9 @@ def _resolve_scan_target(target: str) -> tuple[list[str] | None, str]:
         "chatgpt-export": (["scan-chatgpt-export"], "ChatGPT export"),
         "codebuddy": (["scan-codebuddy"], "CodeBuddy"),
         "cursor": (["scan-cursor"], "Cursor"),
+        "trae": (["scan-trae"], "Trae"),
         "warp": (["scan-warp"], "Warp"),
-        "all": (["scan-all"], "Codex + Claude Code + Augment + ChatGPT export + CodeBuddy + Cursor + Warp"),
+        "all": (["scan-all"], "Codex + Claude Code + Augment + ChatGPT export + CodeBuddy + Cursor + Trae + Warp"),
     }
     return mapping.get(target, (None, ""))
 
