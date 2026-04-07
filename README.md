@@ -70,7 +70,7 @@ Current source behavior:
 - Kaku proxy: exact when the upstream response includes OpenAI-style `usage`
 - Warp: partial for historical day-level backfill because local data is conversation-based
 - CodeBuddy: estimated from locally cached task text
-- Augment: currently unavailable from local logs alone; task state, tool outputs, and edit checkpoints exist, but not a stable token ledger. The extension does expose API-token and custom URL settings, so proxy-based exact tracking may be possible in a future adapter
+- Augment: historical local logs still cannot backfill exact usage, but TokKit can capture exact usage from new Augment requests by patching the local VS Code extension at runtime and scanning `~/.tokkit/augment-usage.ndjson`
 
 ## Highlights
 
@@ -112,6 +112,7 @@ tok setup
 tok doctor
 tok pricing
 tok budget
+tok augment status
 ```
 
 2. See your first report:
@@ -128,6 +129,13 @@ tokkit report-daily --date today --timezone Asia/Shanghai
 tokkit report-range --last 7 --timezone Asia/Shanghai
 ```
 
+4. If you use Augment in VS Code, install the local runtime capture hook once:
+
+```bash
+tok augment install
+tok scan augment
+```
+
 ## Optional setup paths
 
 Use the guided setup command if you want one place to inspect or apply the common local steps:
@@ -137,6 +145,7 @@ tok setup
 tok setup --install-launchd --scan-mode codex
 tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https://api.vivgrid.com/v1
 tok budget init
+tok augment install
 ```
 
 ### Manual scanning
@@ -235,6 +244,7 @@ tok setup
 tok doctor
 tok pricing
 tok budget
+tok augment status
 tok today
 tok last 7
 tok clients month
@@ -260,6 +270,9 @@ Cost notes:
 - `tok budget init` creates a starter `~/.tokkit/budget.json`
 - `tok doctor` summarizes local setup, launchd automation, and client coverage in one report
 - `tok setup` can apply common local steps such as home migration, Kaku proxy configuration, and launchd install
+- `tok augment install` patches the local Augment VS Code extension so new requests can emit exact usage into `~/.tokkit/augment-usage.ndjson`
+- `tok augment status` shows whether the Augment capture hook and capture file are in place
+- `tok scan augment` ingests `~/.tokkit/augment-usage.ndjson` into the SQLite ledger
 - `Credits` remains separate for sources like Warp that expose vendor credits
 - partial sources may show `Input/Output/Cached/Reasoning` as `-` and `Est.$` as `-`
   when only conversation-level totals are available

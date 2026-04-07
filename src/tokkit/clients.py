@@ -72,10 +72,9 @@ CLIENT_DEFINITIONS: tuple[ClientDefinition, ...] = (
         app_names=(),
         default_coverage="unavailable",
         notes=(
-            "Local task manifests, request selection metadata, tool outputs, and edit shards exist, "
-            "but no stable token ledger or complete prompt/response transcript has been found. "
-            "The VS Code extension does expose API-token and custom URL settings, so proxy-based "
-            "exact tracking may be possible."
+            "Historical local logs still do not expose a stable token ledger. "
+            "TokKit can capture exact usage from new Augment requests by patching the VS Code extension "
+            "at runtime, then scanning `~/.tokkit/augment-usage.ndjson`."
         ),
         home_globs=(".vscode/extensions/augment.vscode-augment-*",),
     ),

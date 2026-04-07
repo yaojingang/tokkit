@@ -1143,6 +1143,12 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
             rows=[
                 ["Settings path", str(augment_state["settings_path"])],
                 ["Settings exist", "yes" if augment_state["settings_exists"] else "no"],
+                ["Capture hook installed", "yes" if augment_state["capture_patch_installed"] else "no"],
+                ["Capture backup exists", "yes" if augment_state["capture_backup_exists"] else "no"],
+                ["Capture file", str(augment_state["capture_file"])],
+                ["Capture file exists", "yes" if augment_state["capture_file_exists"] else "no"],
+                ["Captured events", str(augment_state["capture_events"])],
+                ["Captured bytes", str(augment_state["capture_bytes"])],
                 ["OAuth mode", "yes" if augment_state["use_oauth"] else "no"],
                 ["API token configured", "yes" if augment_state["api_token_configured"] else "no"],
                 ["Completion URL", augment_state["completion_url"] or "-"],
@@ -1151,6 +1157,7 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
                 ["Smart Paste URL override", augment_state["smart_paste_url"] or "-"],
                 ["Proxy exact potential", "yes" if augment_state["proxy_exact_possible"] else "no"],
                 ["Assessment", str(augment_state["assessment"])],
+                ["Proxy assessment", str(augment_state.get("proxy_assessment") or "-")],
             ],
         ),
         "",
@@ -1556,10 +1563,29 @@ def _read_kaku_setup_state() -> dict[str, object]:
 
 def _read_augment_setup_state() -> dict[str, object]:
     settings_path = Path.home() / "Library/Application Support/Code/User/settings.json"
+    capture_path = default_augment_capture_path()
+    patch_status = inspect_augment_patch(capture_path=capture_path)
+    capture_events = 0
+    capture_bytes = 0
+    if capture_path.exists():
+        try:
+            capture_bytes = capture_path.stat().st_size
+            with capture_path.open("r", encoding="utf-8") as handle:
+                capture_events = sum(1 for line in handle if line.strip())
+        except OSError:
+            capture_events = 0
+            capture_bytes = 0
+
     default_oauth_url = "https://auth.augmentcode.com"
     state: dict[str, object] = {
         "settings_path": str(settings_path),
         "settings_exists": settings_path.exists(),
+        "capture_patch_installed": patch_status.patched,
+        "capture_backup_exists": patch_status.backup_exists,
+        "capture_file": str(capture_path),
+        "capture_file_exists": capture_path.exists(),
+        "capture_events": capture_events,
+        "capture_bytes": capture_bytes,
         "api_token_configured": False,
         "completion_url": "",
         "chat_url": "",
@@ -1568,9 +1594,7 @@ def _read_augment_setup_state() -> dict[str, object]:
         "oauth_url": default_oauth_url,
         "use_oauth": True,
         "proxy_exact_possible": False,
-        "assessment": (
-            "Augment settings not found. Runtime behavior will fall back to OAuth tenant routing."
-        ),
+        "assessment": _augment_runtime_assessment(patch_status.patched, capture_path.exists(), capture_events),
     }
     if not settings_path.exists():
         return state
@@ -1587,8 +1611,8 @@ def _read_augment_setup_state() -> dict[str, object]:
 
     advanced = payload.get("augment.advanced")
     if not isinstance(advanced, dict):
-        state["assessment"] = (
-            "Augment is installed, but no augment.advanced overrides are configured in VS Code settings. "
+        state["proxy_assessment"] = (
+            "No augment.advanced overrides are configured in VS Code settings. "
             "Runtime behavior will use the default OAuth tenant route."
         )
         return state
@@ -1610,21 +1634,21 @@ def _read_augment_setup_state() -> dict[str, object]:
     proxy_exact_possible = bool(api_token and completion_url)
 
     if proxy_exact_possible and has_hidden_overrides:
-        assessment = (
+        proxy_assessment = (
             "Augment is in API-token mode with custom URLs configured. Proxy-based exact tracking looks feasible."
         )
     elif proxy_exact_possible:
-        assessment = (
+        proxy_assessment = (
             "Augment is in API-token mode with completionURL configured. Chat/Next Edit/Smart Paste may still need "
             "hidden URL overrides for full exact coverage."
         )
     elif use_oauth:
-        assessment = (
+        proxy_assessment = (
             "Augment currently uses OAuth tenant routing. Local exact tracking is unavailable; switching to API-token "
             "mode would be required for proxy-based exact capture."
         )
     else:
-        assessment = (
+        proxy_assessment = (
             "Augment is not configured for API-token mode yet. A proxy path may exist if you set "
             "augment.advanced.apiToken and augment.advanced.completionURL manually in VS Code settings."
         )
@@ -1639,10 +1663,18 @@ def _read_augment_setup_state() -> dict[str, object]:
             "oauth_url": oauth_url,
             "use_oauth": use_oauth,
             "proxy_exact_possible": proxy_exact_possible,
-            "assessment": assessment,
+            "proxy_assessment": proxy_assessment,
         }
     )
     return state
+
+
+def _augment_runtime_assessment(patched: bool, capture_exists: bool, capture_events: int) -> str:
+    if patched and capture_exists and capture_events > 0:
+        return "Runtime capture hook is installed and local Augment usage events are present. Run `tok scan augment` to ingest exact usage."
+    if patched:
+        return "Runtime capture hook is installed. Restart VS Code if needed, use Augment once, then run `tok scan augment`."
+    return "Augment local history is still unavailable for exact backfill. Run `tok augment install` to start exact runtime capture for new requests."
 
 
 def _is_local_proxy_url(url: str) -> bool:
@@ -1880,10 +1912,14 @@ def _doctor_notes_for_client(
     notes = str(row.get("notes") or "")
     if client != "Augment" or not augment_state:
         return notes
-    assessment = str(augment_state.get("assessment") or "").strip()
-    if not assessment:
+    parts = [
+        str(augment_state.get("assessment") or "").strip(),
+        str(augment_state.get("proxy_assessment") or "").strip(),
+    ]
+    details = " ".join(part for part in parts if part)
+    if not details:
         return notes
-    return f"{notes} {assessment}".strip()
+    return f"{notes} {details}".strip()
 
 
 def _doctor_action_for_client(
@@ -1906,6 +1942,10 @@ def _doctor_action_for_client(
     if client == "Claude Code":
         return "run `tok scan claude-code`"
     if client == "Augment":
+        if augment_state and bool(augment_state.get("capture_patch_installed")):
+            if int(augment_state.get("capture_events") or 0) > 0:
+                return "run `tok scan augment`"
+            return "restart VS Code, use Augment once, then run `tok scan augment`"
         if augment_state and bool(augment_state.get("proxy_exact_possible")):
             if any(
                 str(augment_state.get(key) or "").strip()
@@ -1913,9 +1953,7 @@ def _doctor_action_for_client(
             ):
                 return "experimental: point Augment URLs to a local proxy, then build an Augment ingester"
             return "experimental: completionURL is configured, but chat/nextEdit URLs may still need proxy overrides"
-        if augment_state and bool(augment_state.get("use_oauth")):
-            return "switch Augment from OAuth to API-token mode if you want to test proxy-based exact capture"
-        return "unavailable locally; API-token mode may allow a future proxy-based adapter"
+        return "run `tok augment install`"
     if client == "CodeBuddy":
         return "run `tok scan codebuddy`"
     if client == "Codex":

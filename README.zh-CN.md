@@ -65,7 +65,7 @@ TokKit 重点强化的是：
 - Kaku proxy：如果上游响应带 OpenAI 风格 `usage`，就能精确统计
 - Warp：本地更适合拿会话级 token 总量和 credits，历史按日拆分是 `partial`
 - CodeBuddy：根据本地任务文本估算，因此是 `estimated`
-- Augment：仅靠本地日志当前仍是 `unavailable`；本地能看到任务状态、工具输出和编辑 checkpoint，但没有稳定的 token ledger。它的扩展代码同时暴露了 API token 和自定义 URL 配置，所以未来有机会通过本地 proxy 做 `exact` 适配
+- Augment：历史本地日志仍然无法精确回填，但 TokKit 可以通过给本地 VS Code 扩展打运行时 capture hook 的方式，抓到后续新请求的精确 usage，并扫描 `~/.tokkit/augment-usage.ndjson`
 
 ## 核心特点
 
@@ -112,6 +112,7 @@ tok setup
 tok doctor
 tok pricing
 tok budget
+tok augment status
 ```
 
 2. 直接看第一份报表：
@@ -128,6 +129,13 @@ tokkit report-daily --date today --timezone Asia/Shanghai
 tokkit report-range --last 7 --timezone Asia/Shanghai
 ```
 
+4. 如果你在 VS Code 里使用 Augment，可以先装一次本地运行时 capture hook：
+
+```bash
+tok augment install
+tok scan augment
+```
+
 ## 可选接入路径
 
 如果你希望把常见安装步骤收敛到一个命令里，可以直接用：
@@ -137,6 +145,7 @@ tok setup
 tok setup --install-launchd --scan-mode codex
 tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https://api.vivgrid.com/v1
 tok budget init
+tok augment install
 ```
 
 ### 手动扫描
@@ -238,6 +247,7 @@ tok setup
 tok doctor
 tok pricing
 tok budget
+tok augment status
 tok today
 tok last 7
 tok clients month
@@ -262,6 +272,9 @@ TOK_AUTO_SCAN_TARGET=codex tok last 7
 - `tok budget init` 会生成一份 `~/.tokkit/budget.json` 模板
 - `tok doctor` 会集中展示本地配置、自动化状态和客户端覆盖率
 - `tok setup` 可以顺手执行常见本地配置，比如迁移 home、切 Kaku proxy、安装 launchd
+- `tok augment install` 会给本地 Augment VS Code 扩展打上 capture hook，让后续新请求把精确 usage 写进 `~/.tokkit/augment-usage.ndjson`
+- `tok augment status` 可以查看 Augment capture hook 和 capture 文件是否已经就位
+- `tok scan augment` 会把 `~/.tokkit/augment-usage.ndjson` 导入 SQLite 台账
 - `Credits` 会继续保留给 Warp 这类直接提供 credits 的来源
 - `partial` 来源如果拿不到方向拆分，`Input/Output/Cached/Reasoning` 会显示 `-`
 
