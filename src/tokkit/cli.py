@@ -21,6 +21,7 @@ from .db import connect_db
 from .ingest_augment import scan_augment
 from .ingest_chatgpt_export import discover_chatgpt_export_path, scan_chatgpt_export
 from .ingest_claude_code import scan_claude_code
+from .ingest_copilot import discover_copilot_export_path, scan_copilot
 from .ingest_codebuddy import scan_codebuddy
 from .ingest_codex import scan_codex
 from .ingest_cursor import scan_cursor
@@ -61,6 +62,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to conversations.json or a ChatGPT export zip. Defaults to auto-discovery in common folders.",
     )
+
+    copilot_cmd = subparsers.add_parser(
+        "scan-copilot",
+        help="Ingest GitHub Copilot official usage metrics exports or API-backed reports.",
+    )
+    copilot_cmd.add_argument(
+        "--export-file",
+        type=Path,
+        default=None,
+        help="Path to a Copilot usage metrics JSON/NDJSON/zip export. Defaults to auto-discovery in common folders.",
+    )
+    copilot_scope_group = copilot_cmd.add_mutually_exclusive_group()
+    copilot_scope_group.add_argument("--org", default=None, help="Organization slug for the Copilot usage metrics API.")
+    copilot_scope_group.add_argument("--enterprise", default=None, help="Enterprise slug for the Copilot usage metrics API.")
+    copilot_cmd.add_argument("--day", default=None, help="Specific report day in YYYY-MM-DD for API-backed scans.")
+    copilot_cmd.add_argument("--user-login", default=None, help="GitHub login to filter user-level report rows.")
+    copilot_cmd.add_argument("--all-users", action="store_true", help="Ingest all user rows instead of filtering to one login.")
 
     patch_augment_cmd = subparsers.add_parser(
         "patch-augment",
@@ -114,6 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     all_cmd.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
     all_cmd.add_argument("--augment-capture-file", type=Path, default=default_augment_capture_path())
     all_cmd.add_argument("--chatgpt-export-file", type=Path, default=None)
+    all_cmd.add_argument("--copilot-export-file", type=Path, default=None)
     all_cmd.add_argument(
         "--codebuddy-tasks-root",
         type=Path,
@@ -270,6 +289,35 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
 
+        if args.command == "scan-copilot":
+            stats = scan_copilot(
+                conn,
+                export_path=args.export_file,
+                org=args.org,
+                enterprise=args.enterprise,
+                day=args.day,
+                user_login=args.user_login,
+                all_users=args.all_users,
+                tz=tz,
+            )
+            if stats.api_error:
+                print(f"copilot scan failed: {stats.api_error}")
+                return 1
+            if stats.export_path is None and stats.endpoint is None:
+                print("copilot scan complete: export/report not found")
+            else:
+                print(
+                    "copilot scan complete: "
+                    f"source={'api' if stats.endpoint else 'file'} "
+                    f"filter={stats.user_filter or 'all-users'} "
+                    f"rows={stats.rows_seen} "
+                    f"cli_rows={stats.cli_rows_seen} "
+                    f"skipped_without_cli_tokens={stats.skipped_without_cli_tokens} "
+                    f"filtered_out={stats.filtered_out_rows} "
+                    f"emitted={stats.records_emitted}"
+                )
+            return 0
+
         if args.command == "scan-codebuddy":
             stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
             print(
@@ -314,6 +362,16 @@ def main(argv: list[str] | None = None) -> int:
             claude_stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
             augment_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
             chatgpt_stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
+            copilot_stats = scan_copilot(
+                conn,
+                export_path=args.copilot_export_file,
+                org=None,
+                enterprise=None,
+                day=None,
+                user_login=None,
+                all_users=False,
+                tz=tz,
+            )
             codebuddy_stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
             cursor_stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
             trae_stats = scan_trae(conn, tasks_root=args.trae_tasks_root, tz=tz)
@@ -334,6 +392,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"chatgpt_conversations={chatgpt_stats.conversations_seen} "
                 f"chatgpt_messages={chatgpt_stats.messages_seen} "
                 f"chatgpt_emitted={chatgpt_stats.records_emitted} "
+                f"copilot_rows={copilot_stats.rows_seen} "
+                f"copilot_cli_rows={copilot_stats.cli_rows_seen} "
+                f"copilot_emitted={copilot_stats.records_emitted} "
                 f"codebuddy_tasks={codebuddy_stats.tasks_seen} "
                 f"codebuddy_emitted={codebuddy_stats.records_emitted} "
                 f"cursor_events={cursor_stats.events_seen} "
@@ -1159,6 +1220,7 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
     installed_map = detect_installed_clients()
     augment_state = _read_augment_setup_state()
     chatgpt_export_path = discover_chatgpt_export_path()
+    copilot_export_path = discover_copilot_export_path()
     source_rows = conn.execute(
         """
         SELECT
@@ -1216,6 +1278,7 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
                 row,
                 augment_state=augment_state,
                 chatgpt_export_path=chatgpt_export_path,
+                copilot_export_path=copilot_export_path,
             ),
             "recommended_action": _doctor_action_for_client(
                 row,
@@ -1233,6 +1296,7 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
                 "launchd": launchd_payload,
                 "augment": augment_state,
                 "chatgpt_export_path": str(chatgpt_export_path) if chatgpt_export_path else None,
+                "copilot_export_path": str(copilot_export_path) if copilot_export_path else None,
                 "clients": doctor_rows,
             },
             ensure_ascii=False,
@@ -2043,11 +2107,14 @@ def _doctor_notes_for_client(
     *,
     augment_state: dict[str, object] | None = None,
     chatgpt_export_path: Path | None = None,
+    copilot_export_path: Path | None = None,
 ) -> str:
     client = str(row.get("client") or row.get("label") or "")
     notes = str(row.get("notes") or "")
     if client == "ChatGPT" and chatgpt_export_path is not None:
         return f"{notes} Latest export candidate: {chatgpt_export_path}".strip()
+    if client == "GitHub Copilot" and copilot_export_path is not None:
+        return f"{notes} Latest export candidate: {copilot_export_path}".strip()
     if client != "Augment" or not augment_state:
         return notes
     parts = [
@@ -2103,6 +2170,8 @@ def _doctor_action_for_client(
         if chatgpt_export_path is not None:
             return "run `tok scan chatgpt`"
         return "export your ChatGPT data, then run `tok scan chatgpt`"
+    if client == "GitHub Copilot":
+        return "run `tok scan copilot --org <org>` or scan a downloaded usage metrics export"
     if client == "Cursor":
         return "run `tok scan cursor`"
     if client == "Trae":

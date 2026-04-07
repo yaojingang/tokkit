@@ -114,6 +114,7 @@ def _backfill_measurement_methods(conn: sqlite3.Connection) -> None:
             WHEN app = 'codebuddy' THEN 'estimated'
             WHEN app = 'cursor' THEN 'estimated'
             WHEN app = 'chatgpt' THEN 'estimated'
+            WHEN app = 'copilot' THEN 'partial'
             ELSE 'exact'
         END
         WHERE measurement_method IS NULL

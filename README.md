@@ -7,7 +7,7 @@
 TokKit is the lightweight, local-first usage ledger for AI coding tools.
 It helps individual developers track tokens, cost, models, terminals, and
 clients across Codex, Claude Code, Warp, Kaku, Cursor, CodeBuddy, Augment,
-ChatGPT exports, Trae task history, and similar desktop workflows
+ChatGPT exports, GitHub Copilot metrics exports, Trae task history, and similar desktop workflows
 without requiring SDK instrumentation for log-based sources. The core CLI is
 `tokkit`, with `tok` as the operator shortcut and `tokstat` kept as a compatibility alias.
 
@@ -53,6 +53,7 @@ What TokKit emphasizes:
 - Warp AI / Agent Mode
 - Kaku Assistant through an OpenAI-compatible local proxy
 - ChatGPT official data export (`conversations.json` or export zip)
+- GitHub Copilot official usage metrics exports or API-backed user reports
 - Cursor from local sentry telemetry estimation
 - CodeBuddy from local task-history estimation
 - Trae task-history usage recovery when local `ui_messages.json` includes token fields
@@ -74,6 +75,7 @@ Current source behavior:
 - Kaku proxy: exact when the upstream response includes OpenAI-style `usage`
 - Warp: partial for historical day-level backfill because local data is conversation-based
 - ChatGPT export: estimated from official exported conversation text, useful for longitudinal local accounting rather than billable usage
+- GitHub Copilot usage metrics: partial from official usage-metrics exports and report APIs; CLI prompt/output tokens are available, while IDE plugin metrics expose activity and LoC rather than IDE token totals
 - Cursor: estimated from local sentry `ex_hs2` events, useful for directional local accounting rather than billable usage
 - CodeBuddy: estimated from locally cached task text
 - Trae: exact for detected `huohuaai.huohuaai` task history entries that include `tokensIn/tokensOut` in local `ui_messages.json`; native Trae logs alone are still not enough
@@ -156,6 +158,7 @@ tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https:/
 tok budget init
 tok augment install
 tok scan chatgpt
+tok scan copilot --org your-org
 tok scan trae
 ```
 
@@ -285,6 +288,8 @@ Cost notes:
 - `tok augment install` patches the local Augment VS Code extension so new requests can emit exact usage into `~/.tokkit/augment-usage.ndjson`
 - `tok augment status` shows whether the Augment capture hook and capture file are in place
 - `tok scan augment` ingests `~/.tokkit/augment-usage.ndjson` into the SQLite ledger
+- `tok scan copilot --org <org>` pulls official GitHub Copilot user usage-metrics report download links via `gh api` and ingests CLI token totals
+- `tok scan copilot --export-file <path>` ingests downloaded Copilot usage-metrics JSON/NDJSON/zip exports
 - `tok scan trae` ingests exact token fields from detected Trae task-history `ui_messages.json` files when those local task logs are available
 - `Credits` remains separate for sources like Warp that expose vendor credits
 - partial sources may show `Input/Output/Cached/Reasoning` as `-` and `Est.$` as `-`

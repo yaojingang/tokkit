@@ -38,6 +38,22 @@ CLIENT_DEFINITIONS: tuple[ClientDefinition, ...] = (
         notes="Estimated from official ChatGPT export data. No stable local desktop token ledger has been found.",
     ),
     ClientDefinition(
+        key="copilot",
+        label="GitHub Copilot",
+        app_names=(),
+        default_coverage="unavailable",
+        notes=(
+            "Official Copilot usage metrics and exports expose CLI token usage, plus IDE activity and LoC metrics. "
+            "They do not expose IDE extension token totals, so VS Code Copilot remains only partially measurable."
+        ),
+        home_globs=(
+            ".vscode/extensions/github.copilot-*",
+            ".vscode/extensions/github.copilot-chat-*",
+            "Library/Application Support/Code/User/globalStorage/github.copilot*",
+            "Library/Application Support/Code/User/globalStorage/github.copilot-chat*",
+        ),
+    ),
+    ClientDefinition(
         key="warp",
         label="Warp",
         app_names=("Warp.app",),
@@ -135,6 +151,8 @@ def logical_client_for_usage_row(app: str, source: str) -> str | None:
         return "augment"
     if app == "chatgpt":
         return "chatgpt"
+    if app == "copilot":
+        return "copilot"
     if app == "claude-code":
         return "claude-code"
     if app == "warp":

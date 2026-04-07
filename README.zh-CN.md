@@ -6,7 +6,7 @@
 
 TokKit 是一个轻量化、本地优先的 AI 编码工具使用量台账。它面向
 Codex、Claude Code、Warp、Kaku、Cursor、CodeBuddy、Augment、Trae 等桌面工作流，把分散在本机日志、代理响应
-以及 ChatGPT 导出文件和会话聚合数据里的 token、成本、模型、终端和客户端统一到账本里；对于
+以及 ChatGPT / GitHub Copilot 导出文件和会话聚合数据里的 token、成本、模型、终端和客户端统一到账本里；对于
 基于本地日志的来源，不要求 SDK 埋点。核心 CLI 是 `tokkit`，更偏操作流
 的快捷命令是 `tok`，`tokstat` 作为兼容别名保留。
 
@@ -46,6 +46,7 @@ TokKit 重点强化的是：
 - Warp AI / Agent Mode
 - 通过 OpenAI-compatible 本地代理接入的 Kaku Assistant
 - ChatGPT 官方数据导出（`conversations.json` 或导出 zip）
+- GitHub Copilot 官方 usage metrics 导出或 API 用户级报表
 - 基于本地 sentry 遥测做估算的 Cursor
 - 基于本地任务历史做估算的 CodeBuddy
 - 当本地 `ui_messages.json` 含 token 字段时，可恢复 Trae 任务历史 usage
@@ -68,6 +69,7 @@ TokKit 重点强化的是：
 - Kaku proxy：如果上游响应带 OpenAI 风格 `usage`，就能精确统计
 - Warp：本地更适合拿会话级 token 总量和 credits，历史按日拆分是 `partial`
 - ChatGPT 导出：根据官方导出的会话文本做估算，因此是 `estimated`，适合做长期本地台账，不应视为账单口径
+- GitHub Copilot usage metrics：来自官方 usage metrics 导出或 API，因此是 `partial`；其中 Copilot CLI 的 prompt/output token 可用，但 IDE 插件公开的是活跃度和 LoC，不是 IDE token 总数
 - Cursor：可以从本地 sentry `ex_hs2` 事件做方向性估算，因此是 `estimated`，不应视为账单口径
 - CodeBuddy：根据本地任务文本估算，因此是 `estimated`
 - Trae：如果检测到 `huohuaai.huohuaai` 的本地任务历史，并且 `ui_messages.json` 里带有 `tokensIn/tokensOut`，TokKit 可以精确导入这些任务的 token；仅靠原生 Trae 日志本身仍然不够
@@ -155,6 +157,7 @@ tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https:/
 tok budget init
 tok augment install
 tok scan chatgpt
+tok scan copilot --org your-org
 tok scan trae
 ```
 
@@ -286,6 +289,8 @@ TOK_AUTO_SCAN_TARGET=codex tok last 7
 - `tok augment install` 会给本地 Augment VS Code 扩展打上 capture hook，让后续新请求把精确 usage 写进 `~/.tokkit/augment-usage.ndjson`
 - `tok augment status` 可以查看 Augment capture hook 和 capture 文件是否已经就位
 - `tok scan augment` 会把 `~/.tokkit/augment-usage.ndjson` 导入 SQLite 台账
+- `tok scan copilot --org <org>` 会通过 `gh api` 拉 GitHub Copilot 官方用户级 usage metrics 报表并导入其中的 CLI token 总量
+- `tok scan copilot --export-file <path>` 会导入已经下载好的 Copilot usage metrics JSON/NDJSON/zip 导出
 - `tok scan trae` 会在本地存在 Trae 任务历史且带 token 字段时，把这些 `ui_messages.json` 里的精确 token 导入 SQLite 台账
 - `Credits` 会继续保留给 Warp 这类直接提供 credits 的来源
 - `partial` 来源如果拿不到方向拆分，`Input/Output/Cached/Reasoning` 会显示 `-`
