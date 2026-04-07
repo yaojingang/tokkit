@@ -22,6 +22,7 @@ from .ingest_augment import scan_augment
 from .ingest_claude_code import scan_claude_code
 from .ingest_codebuddy import scan_codebuddy
 from .ingest_codex import scan_codex
+from .ingest_cursor import scan_cursor
 from .ingest_warp import scan_warp
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
@@ -66,6 +67,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path.home() / "Library/Application Support/CodeBuddy/User/globalStorage/tencent.planning-genie/tasks",
     )
 
+    cursor_cmd = subparsers.add_parser("scan-cursor", help="Estimate Cursor usage from local sentry telemetry.")
+    cursor_cmd.add_argument(
+        "--cursor-sentry-scope",
+        type=Path,
+        default=Path.home() / "Library/Application Support/Cursor/sentry/scope_v3.json",
+    )
+
     warp_cmd = subparsers.add_parser("scan-warp", help="Ingest Warp AI usage.")
     warp_cmd.add_argument(
         "--warp-db",
@@ -89,6 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--codebuddy-tasks-root",
         type=Path,
         default=Path.home() / "Library/Application Support/CodeBuddy/User/globalStorage/tencent.planning-genie/tasks",
+    )
+    all_cmd.add_argument(
+        "--cursor-sentry-scope",
+        type=Path,
+        default=Path.home() / "Library/Application Support/Cursor/sentry/scope_v3.json",
     )
     all_cmd.add_argument(
         "--warp-db",
@@ -225,6 +238,14 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
+        if args.command == "scan-cursor":
+            stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
+            print(
+                "cursor scan complete: "
+                f"events={stats.events_seen} emitted={stats.records_emitted}"
+            )
+            return 0
+
         if args.command == "scan-warp":
             stats = scan_warp(
                 conn,
@@ -243,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
             claude_stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
             augment_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
             codebuddy_stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
+            cursor_stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
             warp_stats = scan_warp(
                 conn,
                 warp_db=args.warp_db,
@@ -259,6 +281,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"augment_records={augment_stats.records_emitted} "
                 f"codebuddy_tasks={codebuddy_stats.tasks_seen} "
                 f"codebuddy_emitted={codebuddy_stats.records_emitted} "
+                f"cursor_events={cursor_stats.events_seen} "
+                f"cursor_emitted={cursor_stats.records_emitted} "
                 f"warp_conversations={warp_stats.conversations_seen} "
                 f"warp_emitted={warp_stats.records_emitted}"
             )
@@ -1963,7 +1987,7 @@ def _doctor_action_for_client(
     if client == "ChatGPT":
         return "adapter not available yet"
     if client == "Cursor":
-        return "adapter not available yet"
+        return "run `tok scan cursor`"
     if client == "Trae":
         return "adapter not available yet"
     return "scan or configure this client"

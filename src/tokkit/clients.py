@@ -90,7 +90,10 @@ CLIENT_DEFINITIONS: tuple[ClientDefinition, ...] = (
         label="Cursor",
         app_names=("Cursor.app",),
         default_coverage="unavailable",
-        notes="Local data shows AI edit traces but no token usage ledger.",
+        notes=(
+            "Experimental estimated coverage is available from local sentry `ex_hs2` events. "
+            "No exact billable token ledger has been found locally."
+        ),
     ),
     ClientDefinition(
         key="trae",
@@ -134,4 +137,6 @@ def logical_client_for_usage_row(app: str, source: str) -> str | None:
         return "kaku"
     if app == "codebuddy":
         return "codebuddy"
+    if app == "cursor":
+        return "cursor"
     return None

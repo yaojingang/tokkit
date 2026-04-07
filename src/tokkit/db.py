@@ -112,6 +112,7 @@ def _backfill_measurement_methods(conn: sqlite3.Connection) -> None:
         SET measurement_method = CASE
             WHEN app = 'warp' THEN 'partial'
             WHEN app = 'codebuddy' THEN 'estimated'
+            WHEN app = 'cursor' THEN 'estimated'
             ELSE 'exact'
         END
         WHERE measurement_method IS NULL

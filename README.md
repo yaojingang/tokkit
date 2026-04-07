@@ -6,7 +6,8 @@
 
 TokKit is the lightweight, local-first usage ledger for AI coding tools.
 It helps individual developers track tokens, cost, models, terminals, and
-clients across Codex, Warp, Kaku, CodeBuddy, and similar desktop workflows
+clients across Codex, Claude Code, Warp, Kaku, Cursor, CodeBuddy, Augment,
+and similar desktop workflows
 without requiring SDK instrumentation for log-based sources. The core CLI is
 `tokkit`, with `tok` as the operator shortcut and `tokstat` kept as a compatibility alias.
 
@@ -51,6 +52,7 @@ What TokKit emphasizes:
 - Codex Desktop and Codex CLI
 - Warp AI / Agent Mode
 - Kaku Assistant through an OpenAI-compatible local proxy
+- Cursor from local sentry telemetry estimation
 - CodeBuddy from local task-history estimation
 
 All normalized records are stored in `~/.tokkit/usage.sqlite` by default. If an
@@ -69,6 +71,7 @@ Current source behavior:
 - Claude Code: exact from local Claude session JSONL, including VS Code entrypoints when present
 - Kaku proxy: exact when the upstream response includes OpenAI-style `usage`
 - Warp: partial for historical day-level backfill because local data is conversation-based
+- Cursor: estimated from local sentry `ex_hs2` events, useful for directional local accounting rather than billable usage
 - CodeBuddy: estimated from locally cached task text
 - Augment: historical local logs still cannot backfill exact usage, but TokKit can capture exact usage from new Augment requests by patching the local VS Code extension at runtime and scanning `~/.tokkit/augment-usage.ndjson`
 

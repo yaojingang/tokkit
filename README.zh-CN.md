@@ -5,7 +5,7 @@
 [产品简介](docs/PRODUCT_BRIEF.md) | [Positioning & roadmap](docs/POSITIONING_AND_ROADMAP.md) | [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
 
 TokKit 是一个轻量化、本地优先的 AI 编码工具使用量台账。它面向
-Codex、Warp、Kaku、CodeBuddy 等桌面工作流，把分散在本机日志、代理响应
+Codex、Claude Code、Warp、Kaku、Cursor、CodeBuddy、Augment 等桌面工作流，把分散在本机日志、代理响应
 和会话聚合数据里的 token、成本、模型、终端和客户端统一到账本里；对于
 基于本地日志的来源，不要求 SDK 埋点。核心 CLI 是 `tokkit`，更偏操作流
 的快捷命令是 `tok`，`tokstat` 作为兼容别名保留。
@@ -45,6 +45,7 @@ TokKit 重点强化的是：
 - Codex Desktop 和 Codex CLI
 - Warp AI / Agent Mode
 - 通过 OpenAI-compatible 本地代理接入的 Kaku Assistant
+- 基于本地 sentry 遥测做估算的 Cursor
 - 基于本地任务历史做估算的 CodeBuddy
 
 所有归一化后的记录都保存在：
@@ -64,6 +65,7 @@ TokKit 重点强化的是：
 - Claude Code：可以从本地 Claude session JSONL 精确统计，包含可识别的 VS Code 入口
 - Kaku proxy：如果上游响应带 OpenAI 风格 `usage`，就能精确统计
 - Warp：本地更适合拿会话级 token 总量和 credits，历史按日拆分是 `partial`
+- Cursor：可以从本地 sentry `ex_hs2` 事件做方向性估算，因此是 `estimated`，不应视为账单口径
 - CodeBuddy：根据本地任务文本估算，因此是 `estimated`
 - Augment：历史本地日志仍然无法精确回填，但 TokKit 可以通过给本地 VS Code 扩展打运行时 capture hook 的方式，抓到后续新请求的精确 usage，并扫描 `~/.tokkit/augment-usage.ndjson`
 
