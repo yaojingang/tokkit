@@ -27,7 +27,7 @@ from .ingest_cursor import scan_cursor
 from .ingest_warp import scan_warp
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
-from .utils import DEFAULT_DB_PATH, default_augment_capture_path, default_db_path, default_log_dir, default_report_dir, format_float, format_int, get_timezone, resolve_app_home, today_string
+from .utils import DEFAULT_DB_PATH, default_augment_capture_path, default_db_path, default_log_dir, default_report_dir, format_float, format_int, get_timezone, parse_timestamp, resolve_app_home, today_string
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -321,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "report-daily":
             target_date = _resolve_date_alias(args.date, tz)
-            rendered = render_daily_report(conn, target_date, json_mode=args.json)
+            rendered = render_daily_report(conn, target_date, json_mode=args.json, tz=tz)
             _emit_rendered(rendered, args.output)
             return 0
 
@@ -363,7 +363,8 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode: bool) -> str:
+def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode: bool, tz=None) -> str:
+    tz = tz or get_timezone(None)
     totals = conn.execute(
         """
         SELECT
@@ -428,6 +429,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             str(row["model_label"]),
         ),
     )
+    by_hour = _aggregate_hourly_usage_rows(conn, target_date, tz)
 
     if json_mode:
         totals_payload = dict(totals)
@@ -435,6 +437,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
         payload = {
             "date": target_date,
             "totals": totals_payload,
+            "by_hour": by_hour,
             "by_terminal": by_terminal,
             "by_model": by_model,
             "by_source": by_source,
@@ -456,8 +459,48 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             f"records={totals['records']}"
         ),
         "",
-        "By terminal:",
+        "By hour:",
     ]
+    if not by_hour:
+        lines.append("  (no records)")
+    else:
+        lines.append(
+            _render_table(
+                headers=[
+                    "Hour",
+                    "Total",
+                    "Input",
+                    "Output",
+                    "Cached",
+                    "Reasoning",
+                    "Est.$",
+                    "Credits",
+                    "Records",
+                ],
+                rows=[
+                    [
+                        row["hour_label"],
+                        format_int(row["total_tokens"]),
+                        format_int(row["input_tokens"]),
+                        format_int(row["output_tokens"]),
+                        format_int(row["cached_input_tokens"]),
+                        format_int(row["reasoning_tokens"]),
+                        format_float(row["estimated_cost_usd"]),
+                        format_float(row["credits"]),
+                        str(row["records"]),
+                    ]
+                    for row in by_hour
+                ],
+                right_align={1, 2, 3, 4, 5, 6, 7, 8},
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+        "By terminal:",
+        ]
+    )
     if not by_terminal:
         lines.append("  (no records)")
     else:
@@ -2038,6 +2081,41 @@ def _doctor_action_for_client(
     if client == "Trae":
         return "adapter not available yet"
     return "scan or configure this client"
+
+
+def _aggregate_hourly_usage_rows(conn: sqlite3.Connection, target_date: str, tz) -> list[dict[str, object]]:
+    raw_rows = _enrich_usage_rows(
+        conn.execute(
+            """
+            SELECT
+                started_at,
+                app,
+                source,
+                measurement_method,
+                COALESCE(model, '') AS model,
+                COALESCE(json_extract(metadata_json, '$.model_provider'), '') AS model_provider,
+                input_tokens,
+                output_tokens,
+                cached_input_tokens,
+                reasoning_tokens,
+                COALESCE(total_tokens, 0) AS total_tokens,
+                COALESCE(credits, 0.0) AS credits,
+                1 AS records
+            FROM usage_records
+            WHERE local_date = ?
+            ORDER BY started_at ASC
+            """,
+            (target_date,),
+        ).fetchall()
+    )
+    for row in raw_rows:
+        row["hour_label"] = parse_timestamp(str(row["started_at"])).astimezone(tz).strftime("%H:00")
+    return _aggregate_usage_rows(
+        raw_rows,
+        key_fields=["hour_label"],
+        key_builder=lambda row: (row["hour_label"],),
+        sort_key=lambda row: (str(row["hour_label"]),),
+    )
 
 
 def _aggregate_usage_rows(

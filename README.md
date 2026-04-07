@@ -221,6 +221,7 @@ tokkit report-clients --last 7 --timezone Asia/Shanghai
 Daily report:
 
 - totals
+- by hour
 - by terminal
 - by model
 - by source

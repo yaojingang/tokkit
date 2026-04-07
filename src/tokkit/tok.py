@@ -18,7 +18,7 @@ Usage:
 
 Reports / 报表:
   tok today                 Show today's report / 查看今天的报表
-                            Includes totals + by source/terminal/model tables / 包含总量以及按来源、终端、模型分组的表格
+                            Includes totals + by hour/source/terminal/model tables / 包含总量以及按小时、来源、终端、模型分组的表格
   tok yesterday             Show yesterday's report / 查看昨天的报表
   tok 2026-03-31            Show a specific date / 查看指定日期的报表
   tok last 7                Show last 7 days / 查看最近 7 天报表

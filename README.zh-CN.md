@@ -223,6 +223,7 @@ tokkit report-clients --last 7 --timezone Asia/Shanghai
 日报：
 
 - totals
+- by hour
 - by terminal
 - by model
 - by source
