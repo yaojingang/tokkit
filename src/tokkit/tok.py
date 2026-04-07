@@ -43,10 +43,11 @@ Scans / 扫描:
   tok scan codex            Manually scan Codex now / 立即手动扫描 Codex
   tok scan claude-code      Manually scan Claude Code now / 立即手动扫描 Claude Code
   tok scan augment          Manually scan Augment capture logs now / 立即手动扫描 Augment 捕获日志
+  tok scan chatgpt [path]   Scan ChatGPT export estimates now / 立即扫描 ChatGPT 导出估算数据
   tok scan codebuddy        Manually scan CodeBuddy estimates now / 立即手动扫描 CodeBuddy 估算数据
   tok scan cursor           Manually scan Cursor estimates now / 立即手动扫描 Cursor 估算数据
   tok scan warp             Manually scan Warp now / 立即手动扫描 Warp
-  tok scan all              Manually scan Codex + Claude Code + Augment + CodeBuddy + Cursor + Warp now / 立即手动扫描 Codex、Claude Code、Augment、CodeBuddy、Cursor 和 Warp
+  tok scan all              Manually scan Codex + Claude Code + Augment + ChatGPT export + CodeBuddy + Cursor + Warp now / 立即手动扫描 Codex、Claude Code、Augment、ChatGPT 导出、CodeBuddy、Cursor 和 Warp
 
 JSON output / JSON 输出:
   tok json today            Show today's report as JSON / 以 JSON 输出今天的报表
@@ -73,7 +74,7 @@ Budget / 预算:
 Auto scan / 自动扫描:
   report commands auto-scan before rendering / 报表命令会先自动扫描再输出
   TOK_AUTO_SCAN_BEFORE_REPORTS=0               disable auto scan / 关闭自动扫描
-  TOK_AUTO_SCAN_TARGET=all|codex|claude-code|augment|warp|codebuddy|cursor  choose scan target / 指定扫描目标
+  TOK_AUTO_SCAN_TARGET=all|codex|claude-code|augment|chatgpt|warp|codebuddy|cursor  choose scan target / 指定扫描目标
 """
 
 
@@ -127,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_scan_command(args: list[str]) -> int:
     target = args[0] if args else "codex"
+    if target in {"chatgpt", "chatgpt-export"}:
+        command = ["scan-chatgpt-export"]
+        if len(args) > 1:
+            command.extend(["--export-file", args[1]])
+        return _run_tokkit(command)
     mapping = {
         "codex": ["scan-codex"],
         "claude-code": ["scan-claude-code"],
@@ -320,10 +326,12 @@ def _resolve_scan_target(target: str) -> tuple[list[str] | None, str]:
         "claude-code": (["scan-claude-code"], "Claude Code"),
         "claude": (["scan-claude-code"], "Claude Code"),
         "augment": (["scan-augment"], "Augment"),
+        "chatgpt": (["scan-chatgpt-export"], "ChatGPT export"),
+        "chatgpt-export": (["scan-chatgpt-export"], "ChatGPT export"),
         "codebuddy": (["scan-codebuddy"], "CodeBuddy"),
         "cursor": (["scan-cursor"], "Cursor"),
         "warp": (["scan-warp"], "Warp"),
-        "all": (["scan-all"], "Codex + Claude Code + Augment + CodeBuddy + Cursor + Warp"),
+        "all": (["scan-all"], "Codex + Claude Code + Augment + ChatGPT export + CodeBuddy + Cursor + Warp"),
     }
     return mapping.get(target, (None, ""))
 

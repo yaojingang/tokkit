@@ -34,8 +34,8 @@ CLIENT_DEFINITIONS: tuple[ClientDefinition, ...] = (
         key="chatgpt",
         label="ChatGPT",
         app_names=("ChatGPT.app", "ChatGPT Atlas.app"),
-        default_coverage="unavailable",
-        notes="No local token ledger found yet.",
+        default_coverage="estimated",
+        notes="Estimated from official ChatGPT export data. No stable local desktop token ledger has been found.",
     ),
     ClientDefinition(
         key="warp",
@@ -129,6 +129,8 @@ def logical_client_for_usage_row(app: str, source: str) -> str | None:
         return "codex"
     if app == "augment":
         return "augment"
+    if app == "chatgpt":
+        return "chatgpt"
     if app == "claude-code":
         return "claude-code"
     if app == "warp":

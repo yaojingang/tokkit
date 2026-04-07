@@ -19,6 +19,7 @@ from .budget import resolve_budget_config, write_budget_template
 from .clients import CLIENT_DEFINITIONS, detect_installed_clients, logical_client_for_usage_row
 from .db import connect_db
 from .ingest_augment import scan_augment
+from .ingest_chatgpt_export import discover_chatgpt_export_path, scan_chatgpt_export
 from .ingest_claude_code import scan_claude_code
 from .ingest_codebuddy import scan_codebuddy
 from .ingest_codex import scan_codex
@@ -48,6 +49,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     augment_cmd = subparsers.add_parser("scan-augment", help="Ingest locally captured Augment usage.")
     augment_cmd.add_argument("--capture-file", type=Path, default=default_augment_capture_path())
+
+    chatgpt_cmd = subparsers.add_parser(
+        "scan-chatgpt-export",
+        help="Estimate ChatGPT usage from an exported conversations.json or zip file.",
+    )
+    chatgpt_cmd.add_argument(
+        "--export-file",
+        type=Path,
+        default=None,
+        help="Path to conversations.json or a ChatGPT export zip. Defaults to auto-discovery in common folders.",
+    )
 
     patch_augment_cmd = subparsers.add_parser(
         "patch-augment",
@@ -93,6 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
     all_cmd.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
     all_cmd.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
     all_cmd.add_argument("--augment-capture-file", type=Path, default=default_augment_capture_path())
+    all_cmd.add_argument("--chatgpt-export-file", type=Path, default=None)
     all_cmd.add_argument(
         "--codebuddy-tasks-root",
         type=Path,
@@ -230,6 +243,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"augment scan complete: lines={stats.lines_scanned} records={stats.records_emitted}")
             return 0
 
+        if args.command == "scan-chatgpt-export":
+            stats = scan_chatgpt_export(conn, export_path=args.export_file, tz=tz)
+            if stats.export_path is None:
+                print("chatgpt export scan complete: export not found")
+            else:
+                print(
+                    "chatgpt export scan complete: "
+                    f"export={stats.export_path} "
+                    f"conversations={stats.conversations_seen} "
+                    f"messages={stats.messages_seen} "
+                    f"emitted={stats.records_emitted}"
+                )
+            return 0
+
         if args.command == "scan-codebuddy":
             stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
             print(
@@ -263,6 +290,7 @@ def main(argv: list[str] | None = None) -> int:
             codex_stats = scan_codex(conn, codex_home=args.codex_home, tz=tz)
             claude_stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
             augment_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
+            chatgpt_stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
             codebuddy_stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
             cursor_stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
             warp_stats = scan_warp(
@@ -279,6 +307,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"claude_events={claude_stats.records_seen} "
                 f"augment_lines={augment_stats.lines_scanned} "
                 f"augment_records={augment_stats.records_emitted} "
+                f"chatgpt_conversations={chatgpt_stats.conversations_seen} "
+                f"chatgpt_messages={chatgpt_stats.messages_seen} "
+                f"chatgpt_emitted={chatgpt_stats.records_emitted} "
                 f"codebuddy_tasks={codebuddy_stats.tasks_seen} "
                 f"codebuddy_emitted={codebuddy_stats.records_emitted} "
                 f"cursor_events={cursor_stats.events_seen} "
@@ -1057,6 +1088,7 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
     pricing_resolution = resolve_price_book()
     installed_map = detect_installed_clients()
     augment_state = _read_augment_setup_state()
+    chatgpt_export_path = discover_chatgpt_export_path()
     source_rows = conn.execute(
         """
         SELECT
@@ -1110,8 +1142,16 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
             "coverage": row["coverage"],
             "records": row["records"],
             "last_seen": row["last_seen"],
-            "notes": _doctor_notes_for_client(row, augment_state=augment_state),
-            "recommended_action": _doctor_action_for_client(row, augment_state=augment_state),
+            "notes": _doctor_notes_for_client(
+                row,
+                augment_state=augment_state,
+                chatgpt_export_path=chatgpt_export_path,
+            ),
+            "recommended_action": _doctor_action_for_client(
+                row,
+                augment_state=augment_state,
+                chatgpt_export_path=chatgpt_export_path,
+            ),
         }
         for row in by_client
     ]
@@ -1122,6 +1162,7 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
                 "config": config_payload,
                 "launchd": launchd_payload,
                 "augment": augment_state,
+                "chatgpt_export_path": str(chatgpt_export_path) if chatgpt_export_path else None,
                 "clients": doctor_rows,
             },
             ensure_ascii=False,
@@ -1931,9 +1972,12 @@ def _doctor_notes_for_client(
     row: dict[str, object],
     *,
     augment_state: dict[str, object] | None = None,
+    chatgpt_export_path: Path | None = None,
 ) -> str:
     client = str(row.get("client") or row.get("label") or "")
     notes = str(row.get("notes") or "")
+    if client == "ChatGPT" and chatgpt_export_path is not None:
+        return f"{notes} Latest export candidate: {chatgpt_export_path}".strip()
     if client != "Augment" or not augment_state:
         return notes
     parts = [
@@ -1950,6 +1994,7 @@ def _doctor_action_for_client(
     row: dict[str, object],
     *,
     augment_state: dict[str, object] | None = None,
+    chatgpt_export_path: Path | None = None,
 ) -> str:
     installed = bool(row["installed"])
     records = int(row["records"])
@@ -1985,7 +2030,9 @@ def _doctor_action_for_client(
     if client == "Visual Studio Code":
         return "use the Codex extension or verify codex:vscode usage"
     if client == "ChatGPT":
-        return "adapter not available yet"
+        if chatgpt_export_path is not None:
+            return "run `tok scan chatgpt`"
+        return "export your ChatGPT data, then run `tok scan chatgpt`"
     if client == "Cursor":
         return "run `tok scan cursor`"
     if client == "Trae":

@@ -6,7 +6,7 @@
 
 TokKit 是一个轻量化、本地优先的 AI 编码工具使用量台账。它面向
 Codex、Claude Code、Warp、Kaku、Cursor、CodeBuddy、Augment 等桌面工作流，把分散在本机日志、代理响应
-和会话聚合数据里的 token、成本、模型、终端和客户端统一到账本里；对于
+以及 ChatGPT 导出文件和会话聚合数据里的 token、成本、模型、终端和客户端统一到账本里；对于
 基于本地日志的来源，不要求 SDK 埋点。核心 CLI 是 `tokkit`，更偏操作流
 的快捷命令是 `tok`，`tokstat` 作为兼容别名保留。
 
@@ -45,6 +45,7 @@ TokKit 重点强化的是：
 - Codex Desktop 和 Codex CLI
 - Warp AI / Agent Mode
 - 通过 OpenAI-compatible 本地代理接入的 Kaku Assistant
+- ChatGPT 官方数据导出（`conversations.json` 或导出 zip）
 - 基于本地 sentry 遥测做估算的 Cursor
 - 基于本地任务历史做估算的 CodeBuddy
 
@@ -65,6 +66,7 @@ TokKit 重点强化的是：
 - Claude Code：可以从本地 Claude session JSONL 精确统计，包含可识别的 VS Code 入口
 - Kaku proxy：如果上游响应带 OpenAI 风格 `usage`，就能精确统计
 - Warp：本地更适合拿会话级 token 总量和 credits，历史按日拆分是 `partial`
+- ChatGPT 导出：根据官方导出的会话文本做估算，因此是 `estimated`，适合做长期本地台账，不应视为账单口径
 - Cursor：可以从本地 sentry `ex_hs2` 事件做方向性估算，因此是 `estimated`，不应视为账单口径
 - CodeBuddy：根据本地任务文本估算，因此是 `estimated`
 - Augment：历史本地日志仍然无法精确回填，但 TokKit 可以通过给本地 VS Code 扩展打运行时 capture hook 的方式，抓到后续新请求的精确 usage，并扫描 `~/.tokkit/augment-usage.ndjson`
@@ -115,6 +117,8 @@ tok doctor
 tok pricing
 tok budget
 tok augment status
+tok scan chatgpt
+tok scan chatgpt ~/Downloads/chatgpt-export.zip
 ```
 
 2. 直接看第一份报表：
@@ -148,6 +152,7 @@ tok setup --install-launchd --scan-mode codex
 tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https://api.vivgrid.com/v1
 tok budget init
 tok augment install
+tok scan chatgpt
 ```
 
 ### 手动扫描

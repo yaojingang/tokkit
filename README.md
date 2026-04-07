@@ -7,7 +7,7 @@
 TokKit is the lightweight, local-first usage ledger for AI coding tools.
 It helps individual developers track tokens, cost, models, terminals, and
 clients across Codex, Claude Code, Warp, Kaku, Cursor, CodeBuddy, Augment,
-and similar desktop workflows
+ChatGPT exports, and similar desktop workflows
 without requiring SDK instrumentation for log-based sources. The core CLI is
 `tokkit`, with `tok` as the operator shortcut and `tokstat` kept as a compatibility alias.
 
@@ -52,6 +52,7 @@ What TokKit emphasizes:
 - Codex Desktop and Codex CLI
 - Warp AI / Agent Mode
 - Kaku Assistant through an OpenAI-compatible local proxy
+- ChatGPT official data export (`conversations.json` or export zip)
 - Cursor from local sentry telemetry estimation
 - CodeBuddy from local task-history estimation
 
@@ -71,6 +72,7 @@ Current source behavior:
 - Claude Code: exact from local Claude session JSONL, including VS Code entrypoints when present
 - Kaku proxy: exact when the upstream response includes OpenAI-style `usage`
 - Warp: partial for historical day-level backfill because local data is conversation-based
+- ChatGPT export: estimated from official exported conversation text, useful for longitudinal local accounting rather than billable usage
 - Cursor: estimated from local sentry `ex_hs2` events, useful for directional local accounting rather than billable usage
 - CodeBuddy: estimated from locally cached task text
 - Augment: historical local logs still cannot backfill exact usage, but TokKit can capture exact usage from new Augment requests by patching the local VS Code extension at runtime and scanning `~/.tokkit/augment-usage.ndjson`
@@ -116,6 +118,8 @@ tok doctor
 tok pricing
 tok budget
 tok augment status
+tok scan chatgpt
+tok scan chatgpt ~/Downloads/chatgpt-export.zip
 ```
 
 2. See your first report:
@@ -149,6 +153,7 @@ tok setup --install-launchd --scan-mode codex
 tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https://api.vivgrid.com/v1
 tok budget init
 tok augment install
+tok scan chatgpt
 ```
 
 ### Manual scanning
