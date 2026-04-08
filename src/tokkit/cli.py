@@ -19,6 +19,7 @@ from .budget import resolve_budget_config, write_budget_template
 from .clients import CLIENT_DEFINITIONS, detect_installed_clients, logical_client_for_usage_row
 from .db import connect_db
 from .ingest_augment import scan_augment
+from .ingest_augment_history import scan_augment_history
 from .ingest_chatgpt_export import discover_chatgpt_export_path, scan_chatgpt_export
 from .ingest_claude_code import scan_claude_code
 from .ingest_copilot import discover_copilot_export_path, scan_copilot
@@ -49,8 +50,16 @@ def build_parser() -> argparse.ArgumentParser:
     claude_cmd = subparsers.add_parser("scan-claude-code", help="Ingest local Claude Code usage.")
     claude_cmd.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
 
-    augment_cmd = subparsers.add_parser("scan-augment", help="Ingest locally captured Augment usage.")
+    augment_cmd = subparsers.add_parser(
+        "scan-augment",
+        help="Ingest locally captured Augment usage plus estimated historical local usage.",
+    )
     augment_cmd.add_argument("--capture-file", type=Path, default=default_augment_capture_path())
+    augment_cmd.add_argument(
+        "--workspace-storage-root",
+        type=Path,
+        default=Path.home() / "Library/Application Support/Code/User/workspaceStorage",
+    )
 
     chatgpt_cmd = subparsers.add_parser(
         "scan-chatgpt-export",
@@ -131,6 +140,11 @@ def build_parser() -> argparse.ArgumentParser:
     all_cmd.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
     all_cmd.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
     all_cmd.add_argument("--augment-capture-file", type=Path, default=default_augment_capture_path())
+    all_cmd.add_argument(
+        "--augment-workspace-storage-root",
+        type=Path,
+        default=Path.home() / "Library/Application Support/Code/User/workspaceStorage",
+    )
     all_cmd.add_argument("--chatgpt-export-file", type=Path, default=None)
     all_cmd.add_argument("--copilot-export-file", type=Path, default=None)
     all_cmd.add_argument(
@@ -271,8 +285,20 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "scan-augment":
-            stats = scan_augment(conn, capture_file=args.capture_file, tz=tz)
-            print(f"augment scan complete: lines={stats.lines_scanned} records={stats.records_emitted}")
+            exact_stats = scan_augment(conn, capture_file=args.capture_file, tz=tz)
+            history_stats = scan_augment_history(
+                conn,
+                workspace_storage_root=args.workspace_storage_root,
+                tz=tz,
+            )
+            print(
+                "augment scan complete: "
+                f"exact_lines={exact_stats.lines_scanned} "
+                f"exact_records={exact_stats.records_emitted} "
+                f"history_selection_entries={history_stats.selection_entries_seen} "
+                f"history_checkpoints={history_stats.checkpoint_files_seen} "
+                f"history_records={history_stats.request_records_emitted}"
+            )
             return 0
 
         if args.command == "scan-chatgpt-export":
@@ -361,6 +387,11 @@ def main(argv: list[str] | None = None) -> int:
             codex_stats = scan_codex(conn, codex_home=args.codex_home, tz=tz)
             claude_stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
             augment_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
+            augment_history_stats = scan_augment_history(
+                conn,
+                workspace_storage_root=args.augment_workspace_storage_root,
+                tz=tz,
+            )
             chatgpt_stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
             copilot_stats = scan_copilot(
                 conn,
@@ -387,8 +418,11 @@ def main(argv: list[str] | None = None) -> int:
                 f"codex_events={codex_stats.records_seen} "
                 f"claude_files={claude_stats.files_scanned} "
                 f"claude_events={claude_stats.records_seen} "
-                f"augment_lines={augment_stats.lines_scanned} "
-                f"augment_records={augment_stats.records_emitted} "
+                f"augment_exact_lines={augment_stats.lines_scanned} "
+                f"augment_exact_records={augment_stats.records_emitted} "
+                f"augment_history_selection_entries={augment_history_stats.selection_entries_seen} "
+                f"augment_history_checkpoints={augment_history_stats.checkpoint_files_seen} "
+                f"augment_history_records={augment_history_stats.request_records_emitted} "
                 f"chatgpt_conversations={chatgpt_stats.conversations_seen} "
                 f"chatgpt_messages={chatgpt_stats.messages_seen} "
                 f"chatgpt_emitted={chatgpt_stats.records_emitted} "
@@ -1873,7 +1907,11 @@ def _augment_runtime_assessment(patched: bool, capture_exists: bool, capture_eve
         return "Runtime capture hook is installed and local Augment usage events are present. Run `tok scan augment` to ingest exact usage."
     if patched:
         return "Runtime capture hook is installed. Restart VS Code if needed, use Augment once, then run `tok scan augment`."
-    return "Augment local history is still unavailable for exact backfill. Run `tok augment install` to start exact runtime capture for new requests."
+    return (
+        "Augment can now be estimated from persisted local request context and checkpoint diffs. "
+        "Run `tok scan augment` for historical estimates, or `tok augment install` to start exact runtime capture "
+        "for new requests."
+    )
 
 
 def _is_local_proxy_url(url: str) -> bool:

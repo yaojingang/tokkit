@@ -79,7 +79,7 @@ Current source behavior:
 - Cursor: estimated from local sentry `ex_hs2` events, useful for directional local accounting rather than billable usage
 - CodeBuddy: estimated from locally cached task text
 - Trae: exact for detected `huohuaai.huohuaai` task history entries that include `tokensIn/tokensOut` in local `ui_messages.json`; native Trae logs alone are still not enough
-- Augment: historical local logs still cannot backfill exact usage, but TokKit can capture exact usage from new Augment requests by patching the local VS Code extension at runtime and scanning `~/.tokkit/augment-usage.ndjson`
+- Augment: TokKit can estimate historical local usage from persisted request selection context and checkpoint diffs, and can capture exact usage from new Augment requests by patching the local VS Code extension at runtime and scanning `~/.tokkit/augment-usage.ndjson`
 
 ## Highlights
 
@@ -140,7 +140,7 @@ tokkit report-daily --date today --timezone Asia/Shanghai
 tokkit report-range --last 7 --timezone Asia/Shanghai
 ```
 
-4. If you use Augment in VS Code, install the local runtime capture hook once:
+4. If you use Augment in VS Code, install the local runtime capture hook once. `tok scan augment` will then scan both exact runtime capture and historical local estimates:
 
 ```bash
 tok augment install

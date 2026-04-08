@@ -42,7 +42,7 @@ Client coverage / 客户端汇总:
 Scans / 扫描:
   tok scan codex            Manually scan Codex now / 立即手动扫描 Codex
   tok scan claude-code      Manually scan Claude Code now / 立即手动扫描 Claude Code
-  tok scan augment          Manually scan Augment capture logs now / 立即手动扫描 Augment 捕获日志
+  tok scan augment          Scan Augment exact capture + historical local estimates now / 立即扫描 Augment 精确捕获和历史本地估算数据
   tok scan chatgpt [path]   Scan ChatGPT export estimates now / 立即扫描 ChatGPT 导出估算数据
   tok scan copilot [args]   Scan GitHub Copilot usage metrics exports or API reports / 扫描 GitHub Copilot 官方 usage metrics 导出或 API 报表
   tok scan codebuddy        Manually scan CodeBuddy estimates now / 立即手动扫描 CodeBuddy 估算数据

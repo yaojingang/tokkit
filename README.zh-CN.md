@@ -73,7 +73,7 @@ TokKit 重点强化的是：
 - Cursor：可以从本地 sentry `ex_hs2` 事件做方向性估算，因此是 `estimated`，不应视为账单口径
 - CodeBuddy：根据本地任务文本估算，因此是 `estimated`
 - Trae：如果检测到 `huohuaai.huohuaai` 的本地任务历史，并且 `ui_messages.json` 里带有 `tokensIn/tokensOut`，TokKit 可以精确导入这些任务的 token；仅靠原生 Trae 日志本身仍然不够
-- Augment：历史本地日志仍然无法精确回填，但 TokKit 可以通过给本地 VS Code 扩展打运行时 capture hook 的方式，抓到后续新请求的精确 usage，并扫描 `~/.tokkit/augment-usage.ndjson`
+- Augment：TokKit 可以根据本地持久化的 request selection context 和 checkpoint diff 对历史使用量做估算；同时也可以通过给本地 VS Code 扩展打运行时 capture hook 的方式，抓到后续新请求的精确 usage，并扫描 `~/.tokkit/augment-usage.ndjson`
 
 ## 核心特点
 
@@ -139,7 +139,7 @@ tokkit report-daily --date today --timezone Asia/Shanghai
 tokkit report-range --last 7 --timezone Asia/Shanghai
 ```
 
-4. 如果你在 VS Code 里使用 Augment，可以先装一次本地运行时 capture hook：
+4. 如果你在 VS Code 里使用 Augment，可以先装一次本地运行时 capture hook。`tok scan augment` 会同时扫描新的精确 capture 和历史本地估算：
 
 ```bash
 tok augment install

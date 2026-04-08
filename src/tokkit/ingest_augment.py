@@ -23,7 +23,13 @@ def scan_augment(
     tz: ZoneInfo,
 ) -> ScanStats:
     stats = ScanStats()
-    conn.execute("DELETE FROM usage_records WHERE app = 'augment'")
+    conn.execute(
+        """
+        DELETE FROM usage_records
+        WHERE app = 'augment'
+          AND measurement_method = 'exact'
+        """
+    )
     if not capture_file.exists():
         conn.commit()
         return stats

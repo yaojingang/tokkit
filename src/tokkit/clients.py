@@ -86,10 +86,11 @@ CLIENT_DEFINITIONS: tuple[ClientDefinition, ...] = (
         key="augment",
         label="Augment",
         app_names=(),
-        default_coverage="unavailable",
+        default_coverage="estimated",
         notes=(
-            "Historical local logs still do not expose a stable token ledger. "
-            "TokKit can capture exact usage from new Augment requests by patching the VS Code extension "
+            "Historical local logs do not expose an official token ledger, but TokKit can estimate request-level "
+            "history from persisted request selection context and checkpoint diffs. "
+            "TokKit can also capture exact usage from new Augment requests by patching the VS Code extension "
             "at runtime, then scanning `~/.tokkit/augment-usage.ndjson`."
         ),
         home_globs=(".vscode/extensions/augment.vscode-augment-*",),
