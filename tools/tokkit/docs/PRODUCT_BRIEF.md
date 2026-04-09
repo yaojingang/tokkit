@@ -6,7 +6,8 @@
 - CLI: `tokkit`
 - Optional shell shortcut: `tok`
 - Compatibility alias: `tokstat`
-- Suggested GitHub repo: `tokkit`
+- Suggested GitHub repo: `yao-cli-tools`
+- Tool path inside the repo: `tools/tokkit`
 
 ## One-line positioning
 

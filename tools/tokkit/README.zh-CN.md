@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+TokKit 现在位于 [`yao-cli-tools`](../../README.md) 仓库下的 `tools/tokkit`。
+
 [产品简介](docs/PRODUCT_BRIEF.md) | [Positioning & roadmap](docs/POSITIONING_AND_ROADMAP.md) | [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
 
 TokKit 是一个轻量化、本地优先的 AI 编码工具使用量台账。它面向
@@ -90,7 +92,7 @@ TokKit 重点强化的是：
 ## 3 步安装
 
 ```bash
-cd "/path/to/tokkit"
+cd "/path/to/yao-cli-tools/tools/tokkit"
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e .

@@ -8,6 +8,9 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/tokkit
     steps:
       - name: Checkout
         uses: actions/checkout@v4

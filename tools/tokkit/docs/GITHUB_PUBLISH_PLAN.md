@@ -2,7 +2,8 @@
 
 ## Recommended repository setup
 
-- Repository name: `tokkit`
+- Repository name: `yao-cli-tools`
+- Tool path: `tools/tokkit`
 - Visibility: start private if you want one more polish pass, otherwise public
 - Default branch: `main`
 - Initial release tag: `v0.1.0`
@@ -30,19 +31,21 @@ Do not publish:
 Use this if you want the first public commit history to already look curated.
 
 1. Initialize a new git repo in the project directory
-2. Commit the codebase as `feat: initial TokKit release`
-3. Create the GitHub repo `tokkit`
-4. Push `main`
-5. Create release `v0.1.0`
+2. Place TokKit under `tools/tokkit`
+3. Commit the codebase as `feat: initial TokKit release`
+4. Create the GitHub repo `yao-cli-tools`
+5. Push `main`
+6. Create release `v0.1.0`
 
 ### Option B: private staging first
 
 Use this if you want to check README, screenshots, and license one more time.
 
 1. Initialize a private GitHub repo
-2. Push the current state
-3. Add screenshots and polish docs
-4. Flip the repo public when ready
+2. Place TokKit under `tools/tokkit`
+3. Push the current state
+4. Add screenshots and polish docs
+5. Flip the repo public when ready
 
 ## Suggested commit sequence
 

@@ -1,8 +1,12 @@
 .DS_Store
+.env
+.env.*
 .venv/
 build/
+coverage/
 dist/
 *.egg-info/
+node_modules/
 
 __pycache__/
 *.pyc
