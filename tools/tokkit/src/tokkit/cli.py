@@ -494,6 +494,17 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             SUM(output_tokens) AS output_tokens,
             SUM(cached_input_tokens) AS cached_input_tokens,
             SUM(reasoning_tokens) AS reasoning_tokens,
+            SUM(
+                CASE
+                    WHEN COALESCE(total_tokens, 0) > 0
+                        AND COALESCE(input_tokens, 0) = 0
+                        AND COALESCE(output_tokens, 0) = 0
+                        AND COALESCE(cached_input_tokens, 0) = 0
+                        AND COALESCE(reasoning_tokens, 0) = 0
+                    THEN COALESCE(total_tokens, 0)
+                    ELSE 0
+                END
+            ) AS unsplit_tokens,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records
@@ -516,6 +527,17 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             SUM(output_tokens) AS output_tokens,
             SUM(cached_input_tokens) AS cached_input_tokens,
             SUM(reasoning_tokens) AS reasoning_tokens,
+            SUM(
+                CASE
+                    WHEN COALESCE(total_tokens, 0) > 0
+                        AND COALESCE(input_tokens, 0) = 0
+                        AND COALESCE(output_tokens, 0) = 0
+                        AND COALESCE(cached_input_tokens, 0) = 0
+                        AND COALESCE(reasoning_tokens, 0) = 0
+                    THEN COALESCE(total_tokens, 0)
+                    ELSE 0
+                END
+            ) AS unsplit_tokens,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records
@@ -576,6 +598,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             f"output={format_int(totals['output_tokens'])} "
             f"cached={format_int(totals['cached_input_tokens'])} "
             f"reasoning={format_int(totals['reasoning_tokens'])} "
+            f"unsplit={format_int(totals['unsplit_tokens'])} "
             f"total={format_int(totals['total_tokens'])} "
             f"est_usd={format_float(estimated_total_cost)} "
             f"credits={format_float(totals['credits'])} "
@@ -597,6 +620,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                     "Output",
                     "Cached",
                     "Reasoning",
+                    "Unsplit",
                     "Credits",
                     "Records",
                 ],
@@ -609,12 +633,13 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_hour
                 ],
-                right_align={1, 2, 3, 4, 5, 6, 7, 8},
+                right_align={1, 2, 3, 4, 5, 6, 7, 8, 9},
             )
         )
 
@@ -638,6 +663,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                     "Output",
                     "Cached",
                     "Reasoning",
+                    "Unsplit",
                     "Credits",
                     "Records",
                 ],
@@ -651,12 +677,13 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_terminal
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             )
         )
 
@@ -680,6 +707,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                     "Output",
                     "Cached",
                     "Reasoning",
+                    "Unsplit",
                     "Credits",
                     "Records",
                 ],
@@ -693,12 +721,13 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_model
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             )
         )
 
@@ -724,6 +753,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                     "Output",
                     "Cached",
                     "Reasoning",
+                    "Unsplit",
                     "Credits",
                     "Records",
                 ],
@@ -739,12 +769,13 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_source
                 ],
-                right_align={4, 5, 6, 7, 8, 9, 10, 11},
+                right_align={4, 5, 6, 7, 8, 9, 10, 11, 12},
             )
         )
     return "\n".join(lines)
@@ -767,6 +798,17 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
             SUM(output_tokens) AS output_tokens,
             SUM(cached_input_tokens) AS cached_input_tokens,
             SUM(reasoning_tokens) AS reasoning_tokens,
+            SUM(
+                CASE
+                    WHEN COALESCE(total_tokens, 0) > 0
+                        AND COALESCE(input_tokens, 0) = 0
+                        AND COALESCE(output_tokens, 0) = 0
+                        AND COALESCE(cached_input_tokens, 0) = 0
+                        AND COALESCE(reasoning_tokens, 0) = 0
+                    THEN COALESCE(total_tokens, 0)
+                    ELSE 0
+                END
+            ) AS unsplit_tokens,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records
@@ -838,7 +880,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
             "",
             "By date:",
             _render_table(
-                headers=["Date", "Total", "Est.$", "Input", "Output", "Cached", "Reasoning", "Credits", "Records"],
+                headers=["Date", "Total", "Est.$", "Input", "Output", "Cached", "Reasoning", "Unsplit", "Credits", "Records"],
                 rows=[
                     [
                         row["local_date"],
@@ -848,17 +890,18 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_date_rows
                 ],
-                right_align={1, 2, 3, 4, 5, 6, 7, 8},
+                right_align={1, 2, 3, 4, 5, 6, 7, 8, 9},
             ),
             "",
             "By terminal:",
             _render_table(
-                headers=["Terminal", "Method", "Total", "Est.$", "Input", "Output", "Cached", "Reasoning", "Credits", "Records"],
+                headers=["Terminal", "Method", "Total", "Est.$", "Input", "Output", "Cached", "Reasoning", "Unsplit", "Credits", "Records"],
                 rows=[
                     [
                         row["terminal"],
@@ -869,17 +912,18 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_terminal
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             ),
             "",
             "By model:",
             _render_table(
-                headers=["Model", "Method", "Total", "Est.$", "Input", "Output", "Cached", "Reasoning", "Credits", "Records"],
+                headers=["Model", "Method", "Total", "Est.$", "Input", "Output", "Cached", "Reasoning", "Unsplit", "Credits", "Records"],
                 rows=[
                     [
                         row["model_label"],
@@ -890,12 +934,13 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_model
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             ),
             "",
             "By source:",
@@ -916,6 +961,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                 "Output",
                 "Cached",
                 "Reasoning",
+                "Unsplit",
                 "Credits",
                 "Records",
             ],
@@ -932,12 +978,13 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                     format_int(row["output_tokens"]),
                     format_int(row["cached_input_tokens"]),
                     format_int(row["reasoning_tokens"]),
+                    format_int(row["unsplit_tokens"]),
                     format_float(row["credits"]),
                     str(row["records"]),
                 ]
                 for row in rows
             ],
-            right_align={5, 6, 7, 8, 9, 10, 11, 12},
+            right_align={5, 6, 7, 8, 9, 10, 11, 12, 13},
         )
     )
     return "\n".join(lines)
@@ -2275,6 +2322,7 @@ def _aggregate_usage_rows(
                 "output_tokens": 0,
                 "cached_input_tokens": 0,
                 "reasoning_tokens": 0,
+                "unsplit_tokens": 0,
                 "total_tokens": 0,
                 "credits": 0.0,
                 "records": 0,
@@ -2299,6 +2347,7 @@ def _aggregate_usage_rows(
         if row["reasoning_tokens"] is not None:
             bucket["reasoning_tokens"] = int(bucket["reasoning_tokens"]) + int(row["reasoning_tokens"])
             bucket["reasoning_present"] = True
+        bucket["unsplit_tokens"] = int(bucket["unsplit_tokens"]) + _row_unsplit_tokens(row)
         bucket["total_tokens"] = int(bucket["total_tokens"]) + int(row["total_tokens"])
         bucket["credits"] = float(bucket["credits"]) + float(row["credits"])
         bucket["records"] = int(bucket["records"]) + int(row["records"])
@@ -2335,6 +2384,34 @@ def _aggregate_usage_rows(
 def _format_measurement_methods(methods: set[str]) -> str:
     method_order = {"exact": 0, "partial": 1, "estimated": 2}
     return "+".join(sorted(methods, key=lambda method: (method_order.get(method, 99), method)))
+
+
+def _unsplit_tokens_for_row(row: sqlite3.Row | dict[str, object]) -> int:
+    total_tokens = int(row["total_tokens"] or 0)
+    input_tokens = int(row["input_tokens"] or 0)
+    output_tokens = int(row["output_tokens"] or 0)
+    cached_input_tokens = int(row["cached_input_tokens"] or 0)
+    reasoning_tokens = int(row["reasoning_tokens"] or 0)
+    if (
+        total_tokens > 0
+        and input_tokens == 0
+        and output_tokens == 0
+        and cached_input_tokens == 0
+        and reasoning_tokens == 0
+    ):
+        return total_tokens
+    return 0
+
+
+def _row_unsplit_tokens(row: sqlite3.Row | dict[str, object]) -> int:
+    explicit_value = None
+    if isinstance(row, dict):
+        explicit_value = row.get("unsplit_tokens")
+    elif "unsplit_tokens" in row.keys():
+        explicit_value = row["unsplit_tokens"]
+    if explicit_value is not None:
+        return int(explicit_value)
+    return _unsplit_tokens_for_row(row)
 
 
 def _terminal_label(app: str | None, source: str | None, originator: str | None = None) -> str:
@@ -2377,6 +2454,7 @@ def _enrich_usage_rows(rows: Iterable[sqlite3.Row]) -> list[dict[str, object]]:
     for row in rows:
         item = dict(row)
         item["model_label"] = _model_label(item.get("model"), item.get("model_provider"))
+        item["unsplit_tokens"] = _row_unsplit_tokens(item)
         item["estimated_cost_usd"] = estimate_cost_usd(
             model=item.get("model"),
             provider=item.get("model_provider"),
@@ -2402,6 +2480,13 @@ def _sum_estimated_cost(rows: Iterable[dict[str, object]]) -> float | None:
     if not present:
         return None
     return round(total, 8)
+
+
+def _sum_unsplit_tokens(rows: Iterable[dict[str, object]]) -> int:
+    total = 0
+    for row in rows:
+        total += int(row.get("unsplit_tokens") or 0)
+    return total
 
 
 def _render_table(
