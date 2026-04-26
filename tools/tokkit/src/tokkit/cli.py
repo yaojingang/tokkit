@@ -16,7 +16,7 @@ from typing import Iterable
 
 from .augment_capture import apply_augment_capture_patch, inspect_augment_patch, remove_augment_capture_patch
 from .budget import resolve_budget_config, write_budget_template
-from .clients import CLIENT_DEFINITIONS, detect_installed_clients, logical_client_for_usage_row
+from .clients import CLIENT_DEFINITIONS, detect_installed_clients, is_codex_desktop_originator, logical_client_for_usage_row
 from .db import connect_db
 from .ingest_augment import scan_augment
 from .ingest_augment_history import scan_augment_history
@@ -510,6 +510,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             source,
             measurement_method,
             COALESCE(model, '') AS model,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             COALESCE(json_extract(metadata_json, '$.model_provider'), '') AS model_provider,
             SUM(input_tokens) AS input_tokens,
             SUM(output_tokens) AS output_tokens,
@@ -520,8 +521,8 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             COUNT(*) AS records
         FROM usage_records
         WHERE local_date = ?
-        GROUP BY app, source, measurement_method, model, model_provider
-        ORDER BY total_tokens DESC, credits DESC, app, source, model, model_provider, measurement_method
+        GROUP BY app, source, measurement_method, model, originator, model_provider
+        ORDER BY total_tokens DESC, credits DESC, app, source, model, originator, model_provider, measurement_method
         """,
         (target_date,),
         ).fetchall()
@@ -530,7 +531,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
     by_terminal = _aggregate_usage_rows(
         detailed_rows,
         key_fields=["terminal"],
-        key_builder=lambda row: (_terminal_label(row["app"], row["source"]),),
+        key_builder=lambda row: (_terminal_label(row["app"], row["source"], row.get("originator")),),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["terminal"])),
     )
     by_model = _aggregate_usage_rows(
@@ -760,6 +761,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
             source,
             measurement_method,
             COALESCE(model, '') AS model,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             COALESCE(json_extract(metadata_json, '$.model_provider'), '') AS model_provider,
             SUM(input_tokens) AS input_tokens,
             SUM(output_tokens) AS output_tokens,
@@ -770,8 +772,8 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
             COUNT(*) AS records
         FROM usage_records
         WHERE local_date >= date(?, ?)
-        GROUP BY local_date, app, source, measurement_method, model, model_provider
-        ORDER BY local_date DESC, total_tokens DESC, app, source, model, model_provider, measurement_method
+        GROUP BY local_date, app, source, measurement_method, model, originator, model_provider
+        ORDER BY local_date DESC, total_tokens DESC, app, source, model, originator, model_provider, measurement_method
         """,
         (end_date, f"-{max(last_days - 1, 0)} day"),
         ).fetchall()
@@ -785,7 +787,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
     by_terminal = _aggregate_usage_rows(
         detailed_rows,
         key_fields=["terminal"],
-        key_builder=lambda row: (_terminal_label(row["app"], row["source"]),),
+        key_builder=lambda row: (_terminal_label(row["app"], row["source"], row.get("originator")),),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["terminal"])),
     )
     by_model = _aggregate_usage_rows(
@@ -958,6 +960,7 @@ def render_clients_report(
         SELECT
             app,
             source,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             measurement_method,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
@@ -965,8 +968,8 @@ def render_clients_report(
             MAX(started_at) AS last_seen
         FROM usage_records
         WHERE {query_sql}
-        GROUP BY app, source, measurement_method
-        ORDER BY total_tokens DESC, credits DESC, app, source
+        GROUP BY app, source, originator, measurement_method
+        ORDER BY total_tokens DESC, credits DESC, app, source, originator
         """,
         query_params,
     ).fetchall()
@@ -1260,14 +1263,15 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
         SELECT
             app,
             source,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             measurement_method,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records,
             MAX(started_at) AS last_seen
         FROM usage_records
-        GROUP BY app, source, measurement_method
-        ORDER BY total_tokens DESC, credits DESC, app, source
+        GROUP BY app, source, originator, measurement_method
+        ORDER BY total_tokens DESC, credits DESC, app, source, originator
         """
     ).fetchall()
     by_client = _aggregate_client_rows(source_rows, installed_map)
@@ -1608,7 +1612,7 @@ def _aggregate_client_rows(source_rows: list[sqlite3.Row], installed_map: dict[s
     }
 
     for row in source_rows:
-        client_key = logical_client_for_usage_row(row["app"], row["source"])
+        client_key = logical_client_for_usage_row(row["app"], row["source"], row["originator"])
         if client_key is None or client_key not in totals:
             continue
         item = totals[client_key]
@@ -2333,9 +2337,13 @@ def _format_measurement_methods(methods: set[str]) -> str:
     return "+".join(sorted(methods, key=lambda method: (method_order.get(method, 99), method)))
 
 
-def _terminal_label(app: str | None, source: str | None) -> str:
+def _terminal_label(app: str | None, source: str | None, originator: str | None = None) -> str:
     source_value = (source or "").strip().lower()
     app_value = (app or "").strip()
+    if app_value.lower() == "codex" and source_value == "codex:vscode":
+        if is_codex_desktop_originator(originator):
+            return "Codex Desktop"
+        return "VS Code"
     if "vscode" in source_value:
         return "VS Code"
     if source_value.endswith(":cli") or source_value == "cli":
