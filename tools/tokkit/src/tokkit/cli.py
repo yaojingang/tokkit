@@ -30,6 +30,7 @@ from .ingest_trae import scan_trae
 from .ingest_warp import scan_warp
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
+from .scan_planner import record_scan_plan_result, resolve_scan_plan, scan_targets_label
 from .utils import DEFAULT_DB_PATH, default_augment_capture_path, default_db_path, default_log_dir, default_report_dir, format_float, format_int, get_timezone, parse_timestamp, resolve_app_home, today_string
 
 
@@ -171,6 +172,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     all_cmd.add_argument("--baseline-only-warp", action="store_true")
+    all_cmd.add_argument(
+        "--full",
+        action="store_true",
+        help="Force a full scan and refresh the active scan target list for this terminal session.",
+    )
 
     report_cmd = subparsers.add_parser("report-daily", help="Show a daily usage report.")
     report_cmd.add_argument(
@@ -384,61 +390,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "scan-all":
-            codex_stats = scan_codex(conn, codex_home=args.codex_home, tz=tz)
-            claude_stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
-            augment_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
-            augment_history_stats = scan_augment_history(
-                conn,
-                workspace_storage_root=args.augment_workspace_storage_root,
-                tz=tz,
-            )
-            chatgpt_stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
-            copilot_stats = scan_copilot(
-                conn,
-                export_path=args.copilot_export_file,
-                org=None,
-                enterprise=None,
-                day=None,
-                user_login=None,
-                all_users=False,
-                tz=tz,
-            )
-            codebuddy_stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
-            cursor_stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
-            trae_stats = scan_trae(conn, tasks_root=args.trae_tasks_root, tz=tz)
-            warp_stats = scan_warp(
-                conn,
-                warp_db=args.warp_db,
-                tz=tz,
-                baseline_only=args.baseline_only_warp,
-            )
-            print(
-                "scan complete: "
-                f"codex_files={codex_stats.files_scanned} "
-                f"codex_events={codex_stats.records_seen} "
-                f"claude_files={claude_stats.files_scanned} "
-                f"claude_events={claude_stats.records_seen} "
-                f"augment_exact_lines={augment_stats.lines_scanned} "
-                f"augment_exact_records={augment_stats.records_emitted} "
-                f"augment_history_selection_entries={augment_history_stats.selection_entries_seen} "
-                f"augment_history_checkpoints={augment_history_stats.checkpoint_files_seen} "
-                f"augment_history_records={augment_history_stats.request_records_emitted} "
-                f"chatgpt_conversations={chatgpt_stats.conversations_seen} "
-                f"chatgpt_messages={chatgpt_stats.messages_seen} "
-                f"chatgpt_emitted={chatgpt_stats.records_emitted} "
-                f"copilot_rows={copilot_stats.rows_seen} "
-                f"copilot_cli_rows={copilot_stats.cli_rows_seen} "
-                f"copilot_emitted={copilot_stats.records_emitted} "
-                f"codebuddy_tasks={codebuddy_stats.tasks_seen} "
-                f"codebuddy_emitted={codebuddy_stats.records_emitted} "
-                f"cursor_events={cursor_stats.events_seen} "
-                f"cursor_emitted={cursor_stats.records_emitted} "
-                f"trae_tasks={trae_stats.tasks_seen} "
-                f"trae_request_events={trae_stats.request_events_seen} "
-                f"trae_emitted={trae_stats.records_emitted} "
-                f"warp_conversations={warp_stats.conversations_seen} "
-                f"warp_emitted={warp_stats.records_emitted}"
-            )
+            print(_run_scan_all(conn, args, tz))
             return 0
 
         if args.command == "report-daily":
@@ -483,6 +435,160 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         conn.close()
     return 1
+
+
+def _run_scan_all(conn: sqlite3.Connection, args, tz) -> str:
+    plan = resolve_scan_plan(force_full=args.full)
+    active_targets: list[str] = []
+    summary_parts: list[str] = [
+        f"mode={'full' if plan.full_scan else 'targeted'}",
+        f"scanned={scan_targets_label(plan.targets)}",
+    ]
+
+    for target in plan.targets:
+        active, parts = _run_scan_target(conn, target, args, tz)
+        if active:
+            active_targets.append(target)
+        summary_parts.extend(parts)
+
+    record_scan_plan_result(
+        plan,
+        active_targets=active_targets,
+        scanned_targets=plan.targets,
+    )
+    summary_parts.append(f"active={scan_targets_label(active_targets) if active_targets else '-'}")
+    return "scan complete: " + " ".join(summary_parts)
+
+
+def _run_scan_target(conn: sqlite3.Connection, target: str, args, tz) -> tuple[bool, list[str]]:
+    if target == "codex":
+        stats = scan_codex(conn, codex_home=args.codex_home, tz=tz)
+        return (
+            stats.files_scanned > 0 or stats.records_seen > 0,
+            [
+                f"codex_files={stats.files_scanned}",
+                f"codex_events={stats.records_seen}",
+            ],
+        )
+
+    if target == "claude-code":
+        stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
+        return (
+            stats.files_scanned > 0 or stats.records_seen > 0,
+            [
+                f"claude_files={stats.files_scanned}",
+                f"claude_events={stats.records_seen}",
+            ],
+        )
+
+    if target == "augment":
+        exact_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
+        history_stats = scan_augment_history(
+            conn,
+            workspace_storage_root=args.augment_workspace_storage_root,
+            tz=tz,
+        )
+        active = any(
+            (
+                exact_stats.lines_scanned > 0,
+                exact_stats.records_emitted > 0,
+                history_stats.selection_entries_seen > 0,
+                history_stats.checkpoint_files_seen > 0,
+                history_stats.request_records_emitted > 0,
+            )
+        )
+        return (
+            active,
+            [
+                f"augment_exact_lines={exact_stats.lines_scanned}",
+                f"augment_exact_records={exact_stats.records_emitted}",
+                f"augment_history_selection_entries={history_stats.selection_entries_seen}",
+                f"augment_history_checkpoints={history_stats.checkpoint_files_seen}",
+                f"augment_history_records={history_stats.request_records_emitted}",
+            ],
+        )
+
+    if target == "chatgpt":
+        stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
+        return (
+            stats.export_path is not None or stats.conversations_seen > 0 or stats.messages_seen > 0,
+            [
+                f"chatgpt_conversations={stats.conversations_seen}",
+                f"chatgpt_messages={stats.messages_seen}",
+                f"chatgpt_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "copilot":
+        stats = scan_copilot(
+            conn,
+            export_path=args.copilot_export_file,
+            org=None,
+            enterprise=None,
+            day=None,
+            user_login=None,
+            all_users=False,
+            tz=tz,
+        )
+        return (
+            stats.export_path is not None
+            or stats.endpoint is not None
+            or stats.rows_seen > 0
+            or stats.records_emitted > 0,
+            [
+                f"copilot_rows={stats.rows_seen}",
+                f"copilot_cli_rows={stats.cli_rows_seen}",
+                f"copilot_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "codebuddy":
+        stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
+        return (
+            stats.tasks_seen > 0 or stats.records_emitted > 0,
+            [
+                f"codebuddy_tasks={stats.tasks_seen}",
+                f"codebuddy_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "cursor":
+        stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
+        return (
+            stats.events_seen > 0 or stats.records_emitted > 0,
+            [
+                f"cursor_events={stats.events_seen}",
+                f"cursor_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "trae":
+        stats = scan_trae(conn, tasks_root=args.trae_tasks_root, tz=tz)
+        return (
+            stats.tasks_seen > 0 or stats.request_events_seen > 0 or stats.records_emitted > 0,
+            [
+                f"trae_tasks={stats.tasks_seen}",
+                f"trae_request_events={stats.request_events_seen}",
+                f"trae_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "warp":
+        stats = scan_warp(
+            conn,
+            warp_db=args.warp_db,
+            tz=tz,
+            baseline_only=args.baseline_only_warp,
+        )
+        return (
+            stats.conversations_seen > 0 or stats.records_emitted > 0,
+            [
+                f"warp_conversations={stats.conversations_seen}",
+                f"warp_emitted={stats.records_emitted}",
+            ],
+        )
+
+    raise ValueError(f"unsupported scan target: {target}")
 
 
 def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode: bool, tz=None) -> str:

@@ -7,6 +7,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from .scan_planner import current_scan_session_key, resolve_scan_plan
 from .utils import default_db_path, default_report_dir
 
 
@@ -49,7 +50,7 @@ Scans / 扫描:
   tok scan cursor           Manually scan Cursor estimates now / 立即手动扫描 Cursor 估算数据
   tok scan trae             Manually scan Trae task history now / 立即手动扫描 Trae 任务历史
   tok scan warp             Manually scan Warp now / 立即手动扫描 Warp
-  tok scan all              Manually scan Codex + Claude Code + Augment + ChatGPT export + GitHub Copilot export + CodeBuddy + Cursor + Trae + Warp now / 立即手动扫描 Codex、Claude Code、Augment、ChatGPT 导出、GitHub Copilot 导出、CodeBuddy、Cursor、Trae 和 Warp
+  tok scan all [--full]     Smart scan all active targets now / 智能扫描当前活跃目标；加 --full 可强制全量刷新
 
 JSON output / JSON 输出:
   tok json today            Show today's report as JSON / 以 JSON 输出今天的报表
@@ -155,6 +156,8 @@ def _run_scan_command(args: list[str]) -> int:
     if command is None:
         print(f"tok: unsupported scan target '{target}'", file=sys.stderr)
         return 1
+    if target == "all" and len(args) > 1:
+        command.extend(args[1:])
     return _run_tokkit(command)
 
 
@@ -300,6 +303,7 @@ def _run_auto_scan_if_needed() -> int:
                 stdout=handle,
                 stderr=subprocess.STDOUT,
                 text=True,
+                env=_tokkit_env(),
             )
             status = _wait_with_spinner(proc, scan_label)
         if status != 0:
@@ -341,13 +345,15 @@ def _resolve_scan_target(target: str) -> tuple[list[str] | None, str]:
         "cursor": (["scan-cursor"], "Cursor"),
         "trae": (["scan-trae"], "Trae"),
         "warp": (["scan-warp"], "Warp"),
-        "all": (["scan-all"], "Codex + Claude Code + Augment + ChatGPT export + GitHub Copilot export + CodeBuddy + Cursor + Trae + Warp"),
     }
+    if target == "all":
+        plan = resolve_scan_plan()
+        return ["scan-all"], plan.label
     return mapping.get(target, (None, ""))
 
 
 def _run_tokkit(args: list[str]) -> int:
-    return subprocess.run(_tokkit_command(args), check=False).returncode
+    return subprocess.run(_tokkit_command(args), check=False, env=_tokkit_env()).returncode
 
 
 def _tokkit_command(args: list[str]) -> list[str]:
@@ -365,6 +371,12 @@ def _db_path() -> Path:
 
 def _report_dir() -> Path:
     return default_report_dir()
+
+
+def _tokkit_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("TOKKIT_SCAN_SESSION_KEY", current_scan_session_key())
+    return env
 
 
 def _is_date(value: str) -> bool:
