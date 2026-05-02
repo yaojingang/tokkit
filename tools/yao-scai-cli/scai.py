@@ -4,10 +4,13 @@ from __future__ import annotations
 import argparse
 import curses
 import heapq
+import json
 import locale
 import os
 import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -16,18 +19,71 @@ from pathlib import Path
 
 DEFAULT_SCAN_ROOT = Path.home()
 DEFAULT_LIMIT = 20
+DEFAULT_BRIEF_LIMIT = 12
+DEFAULT_ANALYSIS_LIMIT = 80
 COMPUTER_SCAN_ROOT = Path("/")
 COMPRESSED_SUFFIXES = {".gz", ".bz2", ".xz", ".zip", ".zst"}
-MODE_ALIASES = {
-    "f": "files",
-    "file": "files",
-    "files": "files",
-    "d": "dirs",
+ARCHIVE_SUFFIXES = {".7z", ".bz2", ".dmg", ".gz", ".iso", ".rar", ".tar", ".tgz", ".xz", ".zip", ".zst"}
+MEDIA_SUFFIXES = {
+    ".avi",
+    ".m4a",
+    ".m4v",
+    ".mov",
+    ".mp3",
+    ".mp4",
+    ".mpeg",
+    ".mpg",
+    ".wav",
+    ".webm",
+    ".mkv",
+    ".heic",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".psd",
+}
+DOCUMENT_SUFFIXES = {".doc", ".docx", ".key", ".numbers", ".pages", ".pdf", ".ppt", ".pptx", ".xls", ".xlsx"}
+DATA_SUFFIXES = {".csv", ".db", ".dump", ".json", ".parquet", ".sqlite", ".sql"}
+DEV_CACHE_NAMES = {
+    ".cache",
+    ".gradle",
+    ".next",
+    ".nuxt",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".turbo",
+    ".venv",
+    "__pycache__",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "target",
+}
+BACKUP_MARKERS = {"backup", "backups", "bak", "old", "archive", "archives", "备份", "归档"}
+DOWNLOAD_MARKERS = {"download", "downloads", "下载"}
+COMMAND_ALIASES = {
+    "brief": "brief",
+    "b": "brief",
+    "top": "top",
+    "file": "top",
+    "files": "top",
+    "f": "top",
     "dir": "dirs",
     "dirs": "dirs",
+    "d": "dirs",
+    "tui": "tui",
+    "ui": "tui",
+    "t": "tui",
+    "explain": "explain",
+    "why": "explain",
+    "x": "explain",
+    "plan": "plan",
+    "p": "plan",
+    "ai": "ai",
 }
 COMPUTER_ROOT_ALIASES = {"c", "computer", "mac", "root", "全盘", "电脑", "根目录"}
-OPTIONS_REQUIRING_VALUE = {"--limit", "--max-depth"}
+OPTIONS_REQUIRING_VALUE = {"--limit", "--max-depth", "--mode", "--timeout"}
 TUI_ALIASES: set[str] = set()
 PLAIN_ALIASES: set[str] = set()
 DEFAULT_EXCLUDED_DIR_NAMES = {
@@ -66,6 +122,17 @@ SYSTEM_ROOT_PREFIXES = (
     "/opt",
     "/cores",
 )
+RISKY_SYSTEM_PREFIXES = (
+    "/System",
+    "/Library",
+    "/Applications",
+    "/dev",
+    "/bin",
+    "/sbin",
+    "/usr",
+    "/opt",
+    "/cores",
+)
 
 
 @dataclass(order=True)
@@ -91,6 +158,28 @@ class ScanStats:
     scanned_dirs: int = 0
     skipped_dirs: int = 0
     skipped_entries: int = 0
+
+
+@dataclass
+class Insight:
+    path: Path
+    size: int
+    kind: str
+    risk: str
+    category: str
+    reason: str
+    action: str
+
+
+@dataclass
+class SpaceAnalysis:
+    root: Path
+    files: list[FileRecord]
+    dirs: list[DirectoryRecord]
+    file_stats: ScanStats
+    dir_stats: ScanStats
+    elapsed: float
+    insights: list[Insight]
 
 
 def human_size(num_bytes: int) -> str:
@@ -135,7 +224,7 @@ def should_skip_dir(path: Path, root: Path, include_all: bool) -> bool:
         return False
 
     path_str = str(path)
-    if any(path_str == prefix or path_str.startswith(prefix + os.sep) for prefix in SYSTEM_ROOT_PREFIXES):
+    if root == COMPUTER_SCAN_ROOT and any(path_str == prefix or path_str.startswith(prefix + os.sep) for prefix in SYSTEM_ROOT_PREFIXES):
         return True
 
     return path.name in DEFAULT_EXCLUDED_DIR_NAMES
@@ -380,6 +469,485 @@ def print_directory_results(
         size = human_size(record.size)
         mtime = format_mtime(record.mtime)
         print(f"{index:>4}  {name:<{name_width}}  {size:>10}  {record.file_count:>6}  {mtime}")
+
+
+def parse_size(text: str) -> int:
+    value = text.strip().lower()
+    units = {
+        "b": 1,
+        "k": 1024,
+        "kb": 1024,
+        "m": 1024**2,
+        "mb": 1024**2,
+        "g": 1024**3,
+        "gb": 1024**3,
+        "t": 1024**4,
+        "tb": 1024**4,
+    }
+    number = ""
+    unit = ""
+    for char in value:
+        if char.isdigit() or char == ".":
+            number += char
+        elif not char.isspace():
+            unit += char
+    if not number:
+        raise ValueError("size must include a number")
+    multiplier = units.get(unit or "b")
+    if multiplier is None:
+        raise ValueError(f"unsupported size unit: {unit}")
+    return int(float(number) * multiplier)
+
+
+def risk_label(risk: str) -> str:
+    return {
+        "safe": "可安全关注",
+        "review": "需要确认",
+        "risky": "高风险",
+    }.get(risk, risk)
+
+
+def path_parts_lower(path: Path) -> set[str]:
+    return {part.lower() for part in path.parts}
+
+
+def looks_like_backup(path: Path) -> bool:
+    lowered = str(path).lower()
+    name = path.name.lower()
+    return any(marker in lowered for marker in BACKUP_MARKERS) or name.endswith((".bak", ".old", ".backup"))
+
+
+def classify_path(path: Path, size: int, kind: str) -> Insight:
+    suffix = path.suffix.lower()
+    parts = path_parts_lower(path)
+
+    if any(str(path) == prefix or str(path).startswith(prefix + os.sep) for prefix in RISKY_SYSTEM_PREFIXES):
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="risky",
+            category="系统或受管目录",
+            reason="路径位于系统、应用或受管区域，清理风险高。",
+            action="不要直接删除；只通过系统设置或对应应用管理。",
+        )
+
+    if parts & DEV_CACHE_NAMES:
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="safe",
+            category="开发缓存/构建产物",
+            reason="命中常见可重建目录，例如 node_modules、.next、dist、target 或缓存目录。",
+            action="确认项目不在运行后，可优先清理或通过包管理器重建。",
+        )
+
+    if looks_like_backup(path):
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="review",
+            category="历史备份/归档",
+            reason="名称看起来像备份、旧版本或归档文件。",
+            action="确认是否已有更新备份，再移动到废纸篓或外置存储。",
+        )
+
+    if suffix in ARCHIVE_SUFFIXES:
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="review",
+            category="压缩包/镜像",
+            reason="大压缩包或镜像通常是下载残留、安装包或一次性传输文件。",
+            action="确认来源和是否已解压使用，再决定是否清理。",
+        )
+
+    if suffix in MEDIA_SUFFIXES:
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="review",
+            category="大媒体文件",
+            reason="图片、视频或音频文件通常体积大，但可能是个人素材。",
+            action="人工确认后归档到外置盘或云端，不建议自动删除。",
+        )
+
+    if suffix in DATA_SUFFIXES:
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="review",
+            category="数据/数据库文件",
+            reason="数据文件、数据库或导出文件可能承载业务内容。",
+            action="确认是否可再生成或已备份，再处理。",
+        )
+
+    if suffix in DOCUMENT_SUFFIXES:
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="review",
+            category="文档资料",
+            reason="文档可能包含人工产出或业务资料。",
+            action="人工确认价值后再归档或删除。",
+        )
+
+    if parts & DOWNLOAD_MARKERS:
+        return Insight(
+            path=path,
+            size=size,
+            kind=kind,
+            risk="review",
+            category="下载目录残留",
+            reason="下载目录常见临时安装包、素材和传输文件。",
+            action="按文件名和修改时间确认是否仍需要。",
+        )
+
+    return Insight(
+        path=path,
+        size=size,
+        kind=kind,
+        risk="review",
+        category="未分类大项",
+        reason="Scai 还不能可靠判断用途。",
+        action="先查看来源、修改时间和所属项目，再决定是否处理。",
+    )
+
+
+def build_insights(records: list[FileRecord | DirectoryRecord]) -> list[Insight]:
+    insights: list[Insight] = []
+    for record in records:
+        kind = "dir" if isinstance(record, DirectoryRecord) else "file"
+        insights.append(classify_path(record.path, record.size, kind))
+    return sorted(insights, key=lambda item: item.size, reverse=True)
+
+
+def aggregate_insights(insights: list[Insight], risk: str | None = None) -> list[tuple[str, int]]:
+    totals: dict[str, int] = {}
+    for insight in insights:
+        if risk is not None and insight.risk != risk:
+            continue
+        totals[insight.category] = totals.get(insight.category, 0) + insight.size
+    return sorted(totals.items(), key=lambda item: item[1], reverse=True)
+
+
+def create_space_analysis(root: Path, limit: int, include_all: bool, max_depth: int | None = 1) -> SpaceAnalysis:
+    start = time.time()
+    dir_limit = max(8, limit)
+    file_limit = max(DEFAULT_ANALYSIS_LIMIT, limit)
+    dirs, dir_stats = scan_top_dirs(root=root, limit=dir_limit, include_all=include_all, max_depth=max_depth)
+    files, file_stats = scan_top_files(root=root, limit=file_limit, include_all=include_all)
+    insights = build_insights([*dirs, *files])
+    return SpaceAnalysis(
+        root=root,
+        files=files,
+        dirs=dirs,
+        file_stats=file_stats,
+        dir_stats=dir_stats,
+        elapsed=time.time() - start,
+        insights=insights,
+    )
+
+
+def print_numbered_records(root: Path, records: list[FileRecord | DirectoryRecord], label: str, limit: int = 5) -> None:
+    print(label)
+    if not records:
+        print("  暂无记录")
+        return
+    for index, record in enumerate(records[:limit], start=1):
+        name = display_name(record.path, root)
+        print(f"  {index}. {truncate_middle(name, 44):<44} {human_size(record.size):>10}")
+
+
+def print_aggregate_lines(items: list[tuple[str, int]], empty_text: str, limit: int = 5) -> None:
+    if not items:
+        print(f"  - {empty_text}")
+        return
+    for category, size in items[:limit]:
+        print(f"  - {category}: 约 {human_size(size)}")
+
+
+def run_brief(args: argparse.Namespace) -> int:
+    root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
+    analysis = create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=1)
+
+    print("Scai Space Brief")
+    print()
+    print(f"扫描范围: {analysis.root}")
+    print(f"扫描用时: {analysis.elapsed:.2f}s")
+    print(
+        "统计信息: "
+        f"目录 {analysis.dir_stats.scanned_dirs} 个, "
+        f"文件 {analysis.file_stats.scanned_files} 个, "
+        f"跳过目录 {analysis.dir_stats.skipped_dirs + analysis.file_stats.skipped_dirs} 个"
+    )
+    print()
+
+    primary_records: list[FileRecord | DirectoryRecord] = [*analysis.dirs] if analysis.dirs else [*analysis.files]
+    print_numbered_records(analysis.root, primary_records, "主要占用:", limit=5)
+    print()
+
+    print("可安全关注:")
+    print_aggregate_lines(aggregate_insights(analysis.insights, risk="safe"), "暂未发现明显可重建缓存或构建产物")
+    print()
+
+    print("需要确认:")
+    print_aggregate_lines(aggregate_insights(analysis.insights, risk="review"), "暂未发现需要人工确认的大项")
+    print()
+
+    risky = [item for item in analysis.insights if item.risk == "risky"]
+    if risky:
+        print("高风险项:")
+        for item in risky[:3]:
+            print(f"  - {truncate_middle(display_name(item.path, analysis.root), 44)}: {item.reason}")
+        print()
+
+    print("下一步:")
+    print("  - scai top          查看最大文件")
+    print("  - scai dirs         查看最大文件夹")
+    print("  - scai tui          进入交互浏览")
+    print("  - scai plan 20g     生成释放空间方案")
+    print("  - scai ai           生成 AI 诊断")
+    return 0
+
+
+def explain_path(path: Path, include_all: bool) -> Insight:
+    resolved = path.expanduser().resolve()
+    if not resolved.exists():
+        raise FileNotFoundError(str(resolved))
+    if resolved.is_dir():
+        summary = scan_path_summary(resolved, include_all=include_all)
+        return classify_path(resolved, summary.size, "dir")
+    stat = resolved.stat()
+    return classify_path(resolved, stat.st_size, "file")
+
+
+@dataclass
+class PathSummary:
+    size: int
+    file_count: int
+    dir_count: int
+    mtime: float
+
+
+def scan_path_summary(root: Path, include_all: bool) -> PathSummary:
+    if root.is_file():
+        stat = root.stat()
+        return PathSummary(size=stat.st_size, file_count=1, dir_count=0, mtime=stat.st_mtime)
+
+    total_size = 0
+    file_count = 0
+    dir_count = 0
+    latest_mtime = 0.0
+    stack = [root]
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as iterator:
+                dir_count += 1
+                for entry in iterator:
+                    try:
+                        entry_path = Path(entry.path)
+                        if entry.is_symlink():
+                            continue
+                        if entry.is_dir(follow_symlinks=False):
+                            if should_skip_dir(entry_path, root, include_all):
+                                continue
+                            stack.append(entry_path)
+                            continue
+                        if not entry.is_file(follow_symlinks=False):
+                            continue
+                        stat = entry.stat(follow_symlinks=False)
+                        total_size += stat.st_size
+                        file_count += 1
+                        latest_mtime = max(latest_mtime, stat.st_mtime)
+                    except (FileNotFoundError, NotADirectoryError, PermissionError, OSError):
+                        continue
+        except (FileNotFoundError, NotADirectoryError, PermissionError, OSError):
+            continue
+    return PathSummary(size=total_size, file_count=file_count, dir_count=dir_count, mtime=latest_mtime)
+
+
+def run_explain(args: argparse.Namespace) -> int:
+    path = Path(args.path)
+    summary = scan_path_summary(path.expanduser().resolve(), include_all=args.all)
+    insight = explain_path(path, include_all=args.all)
+    print("Scai Explain")
+    print()
+    print(f"路径: {insight.path}")
+    print(f"类型: {'文件夹' if insight.kind == 'dir' else '文件'}")
+    print(f"大小: {human_size(insight.size)}")
+    if insight.kind == "dir":
+        print(f"内容: 目录 {summary.dir_count} 个, 文件 {summary.file_count} 个")
+    print(f"风险: {risk_label(insight.risk)}")
+    print(f"分类: {insight.category}")
+    print(f"判断: {insight.reason}")
+    print(f"建议: {insight.action}")
+    return 0
+
+
+def select_plan_items(insights: list[Insight], target_bytes: int) -> tuple[list[Insight], int]:
+    ordered = sorted(
+        [item for item in insights if item.risk != "risky"],
+        key=lambda item: (0 if item.risk == "safe" else 1, -item.size),
+    )
+    selected: list[Insight] = []
+    total = 0
+    for item in ordered:
+        if any(paths_overlap(item.path, selected_item.path) for selected_item in selected):
+            continue
+        selected.append(item)
+        total += item.size
+        if total >= target_bytes:
+            break
+    return selected, total
+
+
+def paths_overlap(left: Path, right: Path) -> bool:
+    try:
+        left.relative_to(right)
+        return True
+    except ValueError:
+        pass
+    try:
+        right.relative_to(left)
+        return True
+    except ValueError:
+        return False
+
+
+def run_plan(args: argparse.Namespace) -> int:
+    root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
+    try:
+        target = parse_size(args.target)
+    except ValueError as exc:
+        print(f"目标大小无效: {exc}", file=sys.stderr)
+        return 2
+
+    analysis = create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=None)
+    selected, total = select_plan_items(analysis.insights, target)
+
+    print(f"Scai Reclaim Plan: {human_size(target)}")
+    print()
+    print(f"扫描范围: {root}")
+    print("模式: 只生成计划，不删除任何文件。")
+    print()
+    if not selected:
+        print("没有找到可用于生成计划的候选项。")
+        return 0
+
+    for index, item in enumerate(selected, start=1):
+        relative = display_name(item.path, root)
+        print(f"{index}. [{risk_label(item.risk)}] {human_size(item.size):>10}  {truncate_middle(relative, 58)}")
+        print(f"   分类: {item.category}")
+        print(f"   原因: {item.reason}")
+        print(f"   建议: {item.action}")
+
+    print()
+    print(f"预计可处理空间: {human_size(total)}")
+    if total < target:
+        print("提示: 当前候选项不足以达到目标，可以扩大扫描范围或使用 --all。")
+    print("安全策略: 后续执行清理时应默认移动到废纸篓，并记录操作日志。")
+    return 0
+
+
+def analysis_payload(analysis: SpaceAnalysis) -> dict[str, object]:
+    return {
+        "root": str(analysis.root),
+        "elapsed_seconds": round(analysis.elapsed, 2),
+        "top_dirs": [
+            {"path": display_name(record.path, analysis.root), "size": record.size, "human_size": human_size(record.size)}
+            for record in analysis.dirs[:12]
+        ],
+        "top_files": [
+            {
+                "path": display_name(record.path, analysis.root),
+                "size": record.size,
+                "human_size": human_size(record.size),
+                "format": infer_format(record.path),
+            }
+            for record in analysis.files[:20]
+        ],
+        "insights": [
+            {
+                "path": display_name(item.path, analysis.root),
+                "size": item.size,
+                "human_size": human_size(item.size),
+                "risk": item.risk,
+                "category": item.category,
+                "reason": item.reason,
+                "action": item.action,
+            }
+            for item in analysis.insights[:40]
+        ],
+    }
+
+
+def run_ai(args: argparse.Namespace) -> int:
+    root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
+    analysis = create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=1)
+    payload = analysis_payload(analysis)
+
+    codex = shutil.which("codex")
+    if not codex:
+        print("未找到 codex CLI。先输出本地规则分析摘要:")
+        print()
+        return run_brief(args)
+
+    prompt = (
+        "你是 Scai 的磁盘空间顾问。只根据下面 JSON 扫描摘要分析，不读取文件内容，"
+        "不要建议直接永久删除。请用中文输出：空间概览、主要占用、可安全关注、需要确认、不要碰、下一步建议。\n\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+    )
+
+    with tempfile.NamedTemporaryFile("r+", encoding="utf-8", delete=False) as output_file:
+        output_path = output_file.name
+
+    try:
+        completed = subprocess.run(
+            [
+                codex,
+                "exec",
+                "--skip-git-repo-check",
+                "--sandbox",
+                "read-only",
+                "--output-last-message",
+                output_path,
+                "-",
+            ],
+            input=prompt,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=args.timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        print("Codex AI 分析超时，下面是本地规则分析摘要。", file=sys.stderr)
+        print()
+        return run_brief(args)
+    else:
+        if completed.returncode != 0:
+            print("Codex AI 分析失败，下面是本地规则分析摘要。", file=sys.stderr)
+            if completed.stderr.strip():
+                print(completed.stderr.strip(), file=sys.stderr)
+            print()
+            return run_brief(args)
+        with open(output_path, encoding="utf-8") as handle:
+            message = handle.read().strip()
+        print(message or completed.stdout.strip() or "Codex 没有返回分析内容。")
+        return 0
+    finally:
+        try:
+            os.unlink(output_path)
+        except OSError:
+            pass
 
 
 @dataclass
@@ -748,7 +1316,7 @@ class ScaiTui:
             pass
 
 
-def add_common_args(parser: argparse.ArgumentParser, help_text: str) -> None:
+def add_common_args(parser: argparse.ArgumentParser, help_text: str, default_limit: int = DEFAULT_LIMIT) -> None:
     parser.add_argument(
         "root",
         nargs="?",
@@ -758,8 +1326,8 @@ def add_common_args(parser: argparse.ArgumentParser, help_text: str) -> None:
     parser.add_argument(
         "--limit",
         type=int,
-        default=DEFAULT_LIMIT,
-        help=f"输出前 N 条记录，默认 {DEFAULT_LIMIT}。",
+        default=default_limit,
+        help=f"输出前 N 条记录，默认 {default_limit}。",
     )
     parser.add_argument(
         "--all",
@@ -785,27 +1353,46 @@ def add_dirs_args(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=os.environ.get("SCAI_PROG", "scai"),
-        description="Scai (Scan + AI) - AI 原生的磁盘空间扫描与清理顾问，默认打开 TUI 界面。",
+        description="Scai (Scan + AI) - CLI 为主、TUI 为辅的磁盘空间扫描与清理顾问。",
         epilog=(
-            "极简用法:\n"
-            "  scai                打开 TUI 查看当前用户目录\n"
-            "  scai 50             打开 TUI，查看前 50 条\n"
-            "  scai d              打开 TUI，默认进入文件夹模式\n"
-            "  scai c              打开 TUI，从电脑根目录开始安全扫描\n"
-            "  scai ~/Downloads    打开 TUI，只扫描下载目录\n"
-            "  scai --plain        使用表格输出\n"
-            "  bf                  旧别名，兼容入口\n"
-            "  scan                兼容入口，默认使用表格输出\n"
+            "核心用法:\n"
+            "  scai                 输出 Space Brief 智能概览\n"
+            "  scai top             查看最大文件\n"
+            "  scai dirs            查看最大文件夹\n"
+            "  scai tui             打开 TUI 浏览\n"
+            "  scai explain PATH    解释某个文件或目录\n"
+            "  scai plan 20g        生成释放空间方案\n"
+            "  scai ai              调用 Codex CLI 生成 AI 诊断\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    subparsers = parser.add_subparsers(dest="mode")
+    subparsers = parser.add_subparsers(dest="command")
 
-    files_parser = subparsers.add_parser("files", help="按文件大小输出 Top N。")
-    add_common_args(files_parser, "扫描根目录，默认是当前用户主目录。")
+    brief_parser = subparsers.add_parser("brief", help="输出默认 Space Brief 智能概览。")
+    add_common_args(brief_parser, "扫描根目录，默认是当前用户主目录。", default_limit=DEFAULT_BRIEF_LIMIT)
+
+    top_parser = subparsers.add_parser("top", help="按文件大小输出 Top N。")
+    add_common_args(top_parser, "扫描根目录，默认是当前用户主目录。")
 
     dirs_parser = subparsers.add_parser("dirs", help="按目录聚合后的总大小输出 Top N 文件夹。")
     add_dirs_args(dirs_parser)
+
+    tui_parser = subparsers.add_parser("tui", help="打开 TUI 浏览文件或文件夹。")
+    add_common_args(tui_parser, "扫描根目录，默认是当前用户主目录。")
+    tui_parser.add_argument("--mode", choices=("files", "dirs"), default="files", help="TUI 初始模式，默认 files。")
+    tui_parser.add_argument("--max-depth", type=int, help="目录模式只展示不超过指定层级的文件夹。")
+
+    explain_parser = subparsers.add_parser("explain", help="解释某个文件或目录的风险和建议。")
+    explain_parser.add_argument("path", help="要解释的文件或目录路径。")
+    explain_parser.add_argument("--all", action="store_true", help="解释目录时不跳过默认排除目录。")
+
+    plan_parser = subparsers.add_parser("plan", help="生成释放指定空间的清理方案，不执行删除。")
+    plan_parser.add_argument("target", help="目标释放空间，例如 10g、500m。")
+    add_common_args(plan_parser, "扫描根目录，默认是当前用户主目录。", default_limit=DEFAULT_ANALYSIS_LIMIT)
+
+    ai_parser = subparsers.add_parser("ai", help="用 Codex CLI 对扫描摘要做 AI 诊断。")
+    add_common_args(ai_parser, "扫描根目录，默认是当前用户主目录。", default_limit=DEFAULT_BRIEF_LIMIT)
+    ai_parser.add_argument("--timeout", type=int, default=180, help="Codex 分析超时时间，默认 180 秒。")
 
     return parser
 
@@ -828,11 +1415,33 @@ def split_interface_args(raw_args: list[str]) -> tuple[list[str], bool, bool]:
     return filtered, force_tui, force_plain
 
 
-def normalize_args(raw_args: list[str]) -> list[str]:
+def normalize_args(raw_args: list[str], program_name: str, force_tui: bool, force_plain: bool) -> list[str]:
     if len(raw_args) == 1 and raw_args[0].lower() in {"-h", "--help", "help", "h"}:
         return ["--help"]
 
-    mode = "files"
+    if force_tui:
+        return normalize_command_args("tui", raw_args)
+
+    if not raw_args:
+        if program_name == "scan" or force_plain:
+            return ["top"]
+        return ["brief"]
+
+    first = raw_args[0].lower()
+    if force_plain and first not in COMMAND_ALIASES:
+        return normalize_command_args("top", raw_args)
+
+    if first in COMMAND_ALIASES:
+        command = COMMAND_ALIASES[first]
+        return normalize_command_args(command, raw_args[1:])
+
+    if program_name == "scan":
+        return normalize_command_args("top", raw_args)
+
+    return normalize_command_args("brief", raw_args)
+
+
+def normalize_command_args(command: str, raw_args: list[str]) -> list[str]:
     normalized: list[str] = []
     previous_option_needs_value = False
 
@@ -853,8 +1462,12 @@ def normalize_args(raw_args: list[str]) -> list[str]:
             previous_option_needs_value = True
             continue
 
-        if lowered in MODE_ALIASES:
-            mode = MODE_ALIASES[lowered]
+        if command == "tui" and lowered in {"f", "file", "files"}:
+            normalized.extend(["--mode", "files"])
+            continue
+
+        if command == "tui" and lowered in {"d", "dir", "dirs"}:
+            normalized.extend(["--mode", "dirs"])
             continue
 
         if lowered in COMPUTER_ROOT_ALIASES:
@@ -871,39 +1484,51 @@ def normalize_args(raw_args: list[str]) -> list[str]:
 
         normalized.append(arg)
 
-    return [mode, *normalized]
+    return [command, *normalized]
 
 
 def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    if args.limit <= 0:
+    if hasattr(args, "limit") and args.limit <= 0:
         parser.error("--limit 必须大于 0")
     if getattr(args, "max_depth", None) is not None and args.max_depth <= 0:
         parser.error("--max-depth 必须大于 0")
 
-    root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
-    if not root.exists():
-        parser.error(f"路径不存在: {root}")
+    if hasattr(args, "root"):
+        root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
+        if not root.exists():
+            parser.error(f"路径不存在: {root}")
 
-    if args.mode == "dirs" and not root.is_dir():
+    if getattr(args, "command", "") == "dirs" and not root.is_dir():
         parser.error("dirs 模式需要传入目录路径")
 
+    if getattr(args, "command", "") == "tui" and args.mode == "dirs" and not root.is_dir():
+        parser.error("TUI 目录模式需要传入目录路径")
 
-def run_plain(args: argparse.Namespace) -> int:
+    if getattr(args, "command", "") == "explain":
+        path = Path(args.path).expanduser().resolve()
+        if not path.exists():
+            parser.error(f"路径不存在: {path}")
+
+
+def run_top(args: argparse.Namespace) -> int:
     root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
     start = time.time()
-    if args.mode == "dirs":
-        records, stats = scan_top_dirs(
-            root=root,
-            limit=args.limit,
-            include_all=args.all,
-            max_depth=args.max_depth,
-        )
-        print_directory_results(root=root, records=records, stats=stats, elapsed=time.time() - start, include_all=args.all)
-        return 0
-
     records, stats = scan_top_files(root=root, limit=args.limit, include_all=args.all)
     elapsed = time.time() - start
     print_file_results(root=root, records=records, stats=stats, elapsed=elapsed, include_all=args.all)
+    return 0
+
+
+def run_dirs(args: argparse.Namespace) -> int:
+    root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
+    start = time.time()
+    records, stats = scan_top_dirs(
+        root=root,
+        limit=args.limit,
+        include_all=args.all,
+        max_depth=args.max_depth,
+    )
+    print_directory_results(root=root, records=records, stats=stats, elapsed=time.time() - start, include_all=args.all)
     return 0
 
 
@@ -918,26 +1543,42 @@ def should_use_tui(program_name: str, force_tui: bool, force_plain: bool) -> boo
         return False
     if force_tui:
         return True
-    return program_name in {"scai", "bf"}
+    return False
 
 
 def main() -> int:
+    program_name = os.environ.get("SCAI_PROG", "scai")
     parser = build_parser()
     raw_args, force_tui, force_plain = split_interface_args(sys.argv[1:])
-    args = parser.parse_args(normalize_args(raw_args))
+    normalized_args = normalize_args(raw_args, program_name=program_name, force_tui=force_tui, force_plain=force_plain)
+    args = parser.parse_args(normalized_args)
     validate_args(parser, args)
 
-    program_name = os.environ.get("SCAI_PROG", "scai")
-    use_tui = should_use_tui(program_name, force_tui, force_plain)
-    if use_tui:
+    if args.command == "tui" or should_use_tui(program_name, force_tui, force_plain):
         if not sys.stdin.isatty() or not sys.stdout.isatty():
             if force_tui:
                 print("TUI 需要交互式终端；请在真实终端运行 scai，或加 --plain 使用表格输出。", file=sys.stderr)
                 return 2
-            return run_plain(args)
+            if args.command == "tui" and args.mode == "dirs":
+                return run_dirs(args)
+            return run_top(args)
         return run_tui(args)
 
-    return run_plain(args)
+    if args.command == "brief":
+        return run_brief(args)
+    if args.command == "top":
+        return run_top(args)
+    if args.command == "dirs":
+        return run_dirs(args)
+    if args.command == "explain":
+        return run_explain(args)
+    if args.command == "plan":
+        return run_plan(args)
+    if args.command == "ai":
+        return run_ai(args)
+
+    parser.error(f"未知命令: {args.command}")
+    return 2
 
 
 if __name__ == "__main__":

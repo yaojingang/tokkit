@@ -1,21 +1,22 @@
 # Scai
 
-**Scai = Scan + AI**. Scai is an AI-native TUI for scanning, understanding, and safely reclaiming disk space.
+**Scai = Scan + AI**. Scai is an AI-native disk space advisor: CLI for decisions, TUI for exploration.
 
 Tool folder: `tools/yao-scai-cli`  
 Project: `Scai`  
 Command: `scai`
 
-Scai currently focuses on disk usage scanning. The AI layer is planned as the core differentiator: it should explain what is taking space, classify cleanup risk, and suggest safe reclaim plans instead of blindly deleting files.
+Scai is not meant to be only another `du` wrapper. The goal is to scan disk usage, classify what matters, explain cleanup risk, and generate safe reclaim plans.
 
 ## Features
 
-- Default TUI experience for finding large files and folders.
-- Plain table output for scripting and non-interactive terminals.
-- Short commands for common workflows.
-- Safe default exclusions for system, cache, dependency, and metadata folders.
-- Legacy aliases for earlier local commands: `bf` and `scan`.
-- No third-party runtime dependency; implemented with Python standard library `curses`.
+- CLI-first Space Brief as the default experience.
+- TUI browser for interactive exploration.
+- Rule analysis engine for caches, build artifacts, archives, media, backups, data files, and risky system paths.
+- Cleanup plan generation with no deletion side effects.
+- Optional AI diagnosis through the official `codex exec` CLI when available.
+- Plain table output for largest files and folders.
+- No third-party runtime dependency; the TUI uses Python standard library `curses`.
 
 ## Install
 
@@ -27,35 +28,71 @@ From this tool directory, run:
 
 The installer creates or updates these commands in `$HOME/bin`:
 
-- `scai`: main command, defaults to TUI.
-- `bf`: legacy alias, defaults to TUI.
-- `scan`: compatibility alias, defaults to plain table output.
+- `scai`: main command.
+- `bf`: legacy alias.
+- `scan`: compatibility alias, defaults to table-style top files.
 
 Make sure `$HOME/bin` is in your `PATH`.
 
-## Quick Start
+## Core Commands
 
 ```bash
-scai
+scai              # Space Brief: CLI smart overview
+scai top          # largest files
+scai dirs         # largest folders
+scai tui          # open TUI browser
+scai explain PATH # explain one file or folder
+scai plan 20g     # generate a reclaim plan
+scai ai           # ask Codex CLI to analyze the scan summary
+```
+
+Short forms still work:
+
+```bash
 scai 50
 scai d
 scai c
 scai ~/Downloads
-scai d ~/Downloads 30
-scai --plain
+scai --plain ~/Downloads 30
 ```
 
-- `scai`: open the TUI and scan the current user home directory.
-- `scai 50`: show the top 50 records.
-- `scai d`: start in folder mode.
-- `scai c`: scan from `/` while still applying default safety exclusions.
-- `scai ~/Downloads`: scan a specific path.
-- `scai --plain`: use table output for scripts or copied reports.
-- `scai all`: disable default exclusions. Use only when you really need a fuller scan.
+## Default Brief
 
-When Scai is not running in an interactive terminal, it automatically falls back to plain output. Use `scai --tui` to force the TUI.
+`scai` now prints a high-signal CLI overview instead of opening the TUI:
 
-## TUI Keys
+```text
+Scai Space Brief
+
+主要占用:
+  1. Downloads                                  42.1 GB
+  2. Projects                                   31.4 GB
+
+可安全关注:
+  - 开发缓存/构建产物: 约 8.2 GB
+
+需要确认:
+  - 历史备份/归档: 约 12.4 GB
+  - 大媒体文件: 约 21.8 GB
+
+下一步:
+  - scai top          查看最大文件
+  - scai dirs         查看最大文件夹
+  - scai tui          进入交互浏览
+  - scai plan 20g     生成释放空间方案
+  - scai ai           生成 AI 诊断
+```
+
+## TUI
+
+Use the TUI when you want to browse and compare results interactively:
+
+```bash
+scai tui
+scai tui ~/Downloads
+scai tui ~/Projects --mode dirs
+```
+
+TUI keys:
 
 - `q`: quit.
 - `j/k` or `up/down`: move selection.
@@ -72,17 +109,40 @@ When Scai is not running in an interactive terminal, it automatically falls back
 - `[` / `]`: adjust `max-depth` in directory mode.
 - `?`: show or hide help.
 
-## Plain Output
+## Rule Analysis
+
+Scai classifies scan results into risk levels:
+
+- `safe`: likely rebuildable or low-risk, such as `node_modules`, `.next`, `dist`, `target`, and cache folders.
+- `review`: needs human confirmation, such as archives, downloads, media files, backups, data files, and unknown large items.
+- `risky`: system or application-managed paths that should not be removed directly.
+
+The first version is intentionally conservative. It explains why an item was classified and what action is safer.
+
+## Reclaim Plans
+
+`scai plan` produces a plan only; it never deletes files:
 
 ```bash
-scai --plain files ~/Downloads --limit 50
-scai --plain dirs
-scai --plain dirs ~/Downloads
-scai --plain dirs --max-depth 1
-scai --plain dirs ~/Downloads --max-depth 2 --limit 30
-scai --plain --computer
-scai --plain --all
+scai plan 10g
+scai plan 500m ~/Downloads
+scai plan 20g ~/Projects --all
 ```
+
+Plans prefer `safe` candidates first, then `review` candidates. Future cleanup execution should default to moving items to Trash and logging every action.
+
+## AI Diagnosis
+
+`scai ai` summarizes local scan results and passes only that JSON summary to the official `codex exec` CLI. It does not read file contents and does not copy local login credentials.
+
+```bash
+scai ai
+scai ai ~/Downloads --timeout 240
+```
+
+If Codex is unavailable or times out, Scai falls back to the local rule-based Space Brief.
+
+## Compatibility
 
 `bf` remains a legacy alias. `scan` remains a table-first compatibility entry:
 
@@ -90,33 +150,7 @@ scai --plain --all
 bf
 scan
 scan dirs ~/Downloads --limit 30
-scan --tui
+scan --tui ~/Downloads
 ```
 
-## Current Behavior
-
-### `scai` / `scai --plain` / `scai files`
-
-- Scans the current user home directory by default.
-- Skips system, cache, dependency, and metadata folders by default, such as `Library`, `.Trash`, `.git`, and `node_modules`.
-- `scai c` or `--computer` scans from `/` while still applying default safety exclusions.
-- Counts regular files only and does not follow symlinks.
-- TUI columns: index, size, format, modified time, path.
-- Plain columns: index, filename, format, size, modified time.
-
-### `scai d` / `scai --plain dirs`
-
-- Recursively aggregates directory size.
-- Does not rank the scan root itself, otherwise it would always be first.
-- Supports `--max-depth`, for example `scai dirs --max-depth 1`.
-- Columns: index, folder, total size, file count, modified time.
-
-## AI Direction
-
-Scai should not become just another `du` replacement. The target is an AI-guided disk space advisor:
-
-- Generate a storage diagnosis after scanning.
-- Recognize caches, backups, build artifacts, downloaded leftovers, and high-risk paths.
-- Group suggestions into safe to clean, needs confirmation, and do not touch.
-- Integrate AI through official CLIs or local model providers.
-- Never read, copy, or depend on private local login tokens directly.
+`scai --plain PATH 30` maps to the old table-style top-file output.
