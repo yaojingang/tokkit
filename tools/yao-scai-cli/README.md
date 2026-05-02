@@ -17,6 +17,7 @@ Scai is not meant to be only another `du` wrapper. The goal is to scan disk usag
 - Rule analysis engine for caches, build artifacts, archives, media, backups, data files, and risky system paths.
 - Cleanup plan generation with no deletion side effects.
 - Optional AI diagnosis through the official `codex exec` CLI when available.
+- Terminal-friendly AI Markdown rendering for headings, emphasis, lists, links, and code blocks.
 - Plain table output for largest files and folders.
 - No third-party runtime dependency; the TUI uses Python standard library `curses`.
 
@@ -149,7 +150,11 @@ Plans prefer `safe` candidates first, then `review` candidates. Future cleanup e
 
 ## AI Diagnosis
 
-`scai ai` summarizes local scan results and passes only that JSON summary to the official `codex exec` CLI. It does not read file contents and does not copy local login credentials.
+`scai ai` summarizes local scan results and passes only that JSON summary to the official `codex exec` CLI. Scai does not read file contents, does not copy local login credentials, and does not read Codex tokens. Authentication is handled by the already-installed local Codex CLI and its existing login state.
+
+The AI prompt contains paths, sizes, formats, rule categories, risk labels, and suggested actions. It does not include file contents. Codex runs with `--sandbox read-only`, so the AI diagnosis step is analysis-only.
+
+AI responses are rendered for terminals: Markdown headings, bold text, lists, links, and code blocks are cleaned up so raw markers like `**text**` or `* item` do not dominate the output.
 
 ```bash
 scai ai

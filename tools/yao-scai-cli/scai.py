@@ -7,6 +7,7 @@ import heapq
 import json
 import locale
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -125,6 +126,10 @@ SYSTEM_ROOT_PREFIXES = (
     "/opt",
     "/cores",
 )
+ANSI_RESET = "\033[0m"
+ANSI_BOLD = "\033[1m"
+ANSI_DIM = "\033[2m"
+ANSI_CYAN = "\033[36m"
 RISKY_SYSTEM_PREFIXES = (
     "/System",
     "/Library",
@@ -509,6 +514,108 @@ def run_with_progress(message: str, work):
     if errors:
         raise errors[0]
     return result[0] if result else None
+
+
+def terminal_styles_enabled() -> bool:
+    return sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+
+
+def terminal_style(text: str, code: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    return f"{code}{text}{ANSI_RESET}"
+
+
+def render_inline_markdown(text: str, styles: bool) -> str:
+    def render_code(match: re.Match[str]) -> str:
+        return terminal_style(match.group(1), ANSI_CYAN, styles)
+
+    def render_bold(match: re.Match[str]) -> str:
+        return terminal_style(match.group(1), ANSI_BOLD, styles)
+
+    def render_dim(match: re.Match[str]) -> str:
+        return terminal_style(match.group(1), ANSI_DIM, styles)
+
+    def render_link(match: re.Match[str]) -> str:
+        label = match.group(1).strip()
+        url = match.group(2).strip()
+        return url if label == url else f"{label} ({url})"
+
+    text = re.sub(r"`([^`\n]+)`", render_code, text)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", render_link, text)
+    text = re.sub(r"\*\*([^*\n]+)\*\*", render_bold, text)
+    text = re.sub(r"__([^_\n]+)__", render_bold, text)
+    text = re.sub(r"~~([^~\n]+)~~", r"\1", text)
+    text = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", render_dim, text)
+    return text
+
+
+def render_markdown_for_terminal(markdown: str) -> str:
+    styles = terminal_styles_enabled()
+    rendered: list[str] = []
+    in_code_block = False
+
+    for raw_line in markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        stripped = raw_line.strip()
+
+        if stripped.startswith(("```", "~~~")):
+            in_code_block = not in_code_block
+            if rendered and rendered[-1]:
+                rendered.append("")
+            continue
+
+        if in_code_block:
+            rendered.append(f"    {raw_line.rstrip()}" if raw_line else "")
+            continue
+
+        if not stripped:
+            if rendered and rendered[-1]:
+                rendered.append("")
+            continue
+
+        heading = re.match(r"^(#{1,6})\s+(.+)$", stripped)
+        if heading:
+            if rendered and rendered[-1]:
+                rendered.append("")
+            title = render_inline_markdown(heading.group(2).strip(), styles)
+            rendered.append(terminal_style(title, ANSI_BOLD, styles))
+            continue
+
+        if re.match(r"^([-*_])(?:\s*\1){2,}$", stripped):
+            width = shutil.get_terminal_size((80, 20)).columns
+            rendered.append("-" * min(72, max(20, width - 8)))
+            continue
+
+        task = re.match(r"^(\s*)[-+*]\s+\[([ xX])\]\s+(.+)$", raw_line)
+        if task:
+            indent = " " * min(len(task.group(1)), 8)
+            mark = "x" if task.group(2).lower() == "x" else " "
+            rendered.append(f"{indent}[{mark}] {render_inline_markdown(task.group(3).strip(), styles)}")
+            continue
+
+        bullet = re.match(r"^(\s*)[-+*]\s+(.+)$", raw_line)
+        if bullet:
+            indent = " " * min(len(bullet.group(1)), 8)
+            rendered.append(f"{indent}- {render_inline_markdown(bullet.group(2).strip(), styles)}")
+            continue
+
+        numbered = re.match(r"^(\s*)(\d+)[.)]\s+(.+)$", raw_line)
+        if numbered:
+            indent = " " * min(len(numbered.group(1)), 8)
+            rendered.append(
+                f"{indent}{numbered.group(2)}. {render_inline_markdown(numbered.group(3).strip(), styles)}"
+            )
+            continue
+
+        quote = re.match(r"^>\s?(.*)$", stripped)
+        if quote:
+            rendered.append(f"  {render_inline_markdown(quote.group(1).strip(), styles)}")
+            continue
+
+        rendered.append(render_inline_markdown(raw_line.rstrip(), styles))
+
+    return "\n".join(rendered).strip()
 
 
 def parse_size(text: str) -> int:
@@ -985,7 +1092,8 @@ def run_ai(args: argparse.Namespace) -> int:
 
     prompt = (
         "你是 Scai 的磁盘空间顾问。只根据下面 JSON 扫描摘要分析，不读取文件内容，"
-        "不要建议直接永久删除。请用中文输出：空间概览、主要占用、可安全关注、需要确认、不要碰、下一步建议。\n\n"
+        "不要建议直接永久删除。请用中文输出：空间概览、主要占用、可安全关注、需要确认、不要碰、下一步建议。"
+        "可以使用 Markdown 标题、加粗、列表和代码块，不要使用 Markdown 表格。\n\n"
         + json.dumps(payload, ensure_ascii=False, indent=2)
     )
 
@@ -1024,7 +1132,8 @@ def run_ai(args: argparse.Namespace) -> int:
             return run_brief(args)
         with open(output_path, encoding="utf-8") as handle:
             message = handle.read().strip()
-        print(message or completed.stdout.strip() or "Codex 没有返回分析内容。")
+        message = message or completed.stdout.strip() or "Codex 没有返回分析内容。"
+        print(render_markdown_for_terminal(message))
         return 0
     finally:
         try:
