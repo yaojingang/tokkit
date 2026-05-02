@@ -19,7 +19,8 @@ from pathlib import Path
 
 DEFAULT_SCAN_ROOT = Path.cwd()
 DEFAULT_LIMIT = 20
-DEFAULT_BRIEF_LIMIT = 12
+DEFAULT_BRIEF_LIMIT = 50
+DEFAULT_MORE_LIMIT = 100
 DEFAULT_ANALYSIS_LIMIT = 80
 COMPUTER_SCAN_ROOT = Path("/")
 COMPRESSED_SUFFIXES = {".gz", ".bz2", ".xz", ".zip", ".zst"}
@@ -80,6 +81,8 @@ COMMAND_ALIASES = {
     "x": "explain",
     "plan": "plan",
     "p": "plan",
+    "more": "more",
+    "m": "more",
     "ai": "ai",
 }
 COMPUTER_ROOT_ALIASES = {"all", "c", "computer", "mac", "root", "全盘", "电脑", "根目录"}
@@ -471,6 +474,43 @@ def print_directory_results(
         print(f"{index:>4}  {name:<{name_width}}  {size:>10}  {record.file_count:>6}  {mtime}")
 
 
+def run_with_progress(message: str, work):
+    if not sys.stderr.isatty():
+        return work()
+
+    result: list[object] = []
+    errors: list[BaseException] = []
+
+    def target() -> None:
+        try:
+            result.append(work())
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    frames = "|/-\\"
+    start = time.time()
+    frame_index = 0
+
+    while thread.is_alive():
+        elapsed = time.time() - start
+        line = f"{frames[frame_index % len(frames)]} {message} 用时 {elapsed:.1f}s"
+        sys.stderr.write("\r" + truncate_middle(line, shutil.get_terminal_size((100, 20)).columns - 1))
+        sys.stderr.flush()
+        frame_index += 1
+        time.sleep(0.12)
+
+    thread.join()
+    width = shutil.get_terminal_size((100, 20)).columns
+    sys.stderr.write("\r" + " " * max(0, width - 1) + "\r")
+    sys.stderr.flush()
+
+    if errors:
+        raise errors[0]
+    return result[0] if result else None
+
+
 def parse_size(text: str) -> int:
     value = text.strip().lower()
     units = {
@@ -665,6 +705,28 @@ def print_numbered_records(root: Path, records: list[FileRecord | DirectoryRecor
         print(f"  {index}. {truncate_middle(name, 44):<44} {human_size(record.size):>10}")
 
 
+def print_file_detail_records(root: Path, records: list[FileRecord], limit: int) -> None:
+    shown = min(limit, len(records))
+    print(f"Top {shown} 文件明细:")
+    if not records:
+        print("  暂无文件记录")
+        return
+
+    terminal_width = shutil.get_terminal_size((130, 20)).columns
+    fixed_width = 6 + 3 + 12 + 3 + 10 + 3 + 16
+    name_width = max(28, min(78, terminal_width - fixed_width))
+    header = f"{'编号':>4}  {'大小':>10}  {'风险':<8}  {'分类':<14}  {'文件':<{name_width}}"
+    print(header)
+    print("-" * len(header))
+
+    for index, record in enumerate(records[:limit], start=1):
+        insight = classify_path(record.path, record.size, "file")
+        name = truncate_middle(display_name(record.path, root), name_width)
+        risk = truncate_middle(risk_label(insight.risk), 8)
+        category = truncate_middle(insight.category, 14)
+        print(f"{index:>4}  {human_size(record.size):>10}  {risk:<8}  {category:<14}  {name:<{name_width}}")
+
+
 def print_aggregate_lines(items: list[tuple[str, int]], empty_text: str, limit: int = 5) -> None:
     if not items:
         print(f"  - {empty_text}")
@@ -675,7 +737,10 @@ def print_aggregate_lines(items: list[tuple[str, int]], empty_text: str, limit: 
 
 def run_brief(args: argparse.Namespace) -> int:
     root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
-    analysis = create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=1)
+    analysis = run_with_progress(
+        f"Scai 正在扫描 {root}",
+        lambda: create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=1),
+    )
 
     print("Scai Space Brief")
     print()
@@ -701,12 +766,20 @@ def run_brief(args: argparse.Namespace) -> int:
     print_aggregate_lines(aggregate_insights(analysis.insights, risk="review"), "暂未发现需要人工确认的大项")
     print()
 
+    print_file_detail_records(analysis.root, analysis.files, args.limit)
+    print()
+
     risky = [item for item in analysis.insights if item.risk == "risky"]
     if risky:
         print("高风险项:")
         for item in risky[:3]:
             print(f"  - {truncate_middle(display_name(item.path, analysis.root), 44)}: {item.reason}")
         print()
+
+    print("显示更多:")
+    print(f"  - scai more        显示 Top {DEFAULT_MORE_LIMIT} 文件")
+    print("  - scai more 200    显示 Top 200 文件")
+    print()
 
     print("下一步:")
     print("  - scai top          查看最大文件")
@@ -775,9 +848,13 @@ def scan_path_summary(root: Path, include_all: bool) -> PathSummary:
 
 
 def run_explain(args: argparse.Namespace) -> int:
-    path = Path(args.path)
-    summary = scan_path_summary(path.expanduser().resolve(), include_all=args.all)
-    insight = explain_path(path, include_all=args.all)
+    path = Path(args.path).expanduser().resolve()
+    if path.is_dir():
+        summary = run_with_progress(f"Scai 正在扫描 {path}", lambda: scan_path_summary(path, include_all=args.all))
+        insight = classify_path(path, summary.size, "dir")
+    else:
+        summary = scan_path_summary(path, include_all=args.all)
+        insight = explain_path(path, include_all=args.all)
     print("Scai Explain")
     print()
     print(f"路径: {insight.path}")
@@ -830,7 +907,10 @@ def run_plan(args: argparse.Namespace) -> int:
         print(f"目标大小无效: {exc}", file=sys.stderr)
         return 2
 
-    analysis = create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=None)
+    analysis = run_with_progress(
+        f"Scai 正在扫描 {root}",
+        lambda: create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=None),
+    )
     selected, total = select_plan_items(analysis.insights, target)
 
     print(f"Scai Reclaim Plan: {human_size(target)}")
@@ -891,7 +971,10 @@ def analysis_payload(analysis: SpaceAnalysis) -> dict[str, object]:
 
 def run_ai(args: argparse.Namespace) -> int:
     root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
-    analysis = create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=1)
+    analysis = run_with_progress(
+        f"Scai 正在扫描 {root}",
+        lambda: create_space_analysis(root=root, limit=args.limit, include_all=args.all, max_depth=1),
+    )
     payload = analysis_payload(analysis)
 
     codex = shutil.which("codex")
@@ -1359,6 +1442,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  scai                 输出 Space Brief 智能概览\n"
             "  scai all             从电脑根目录 / 开始安全扫描\n"
             "  scai top             查看最大文件\n"
+            "  scai more            显示更多 Top 文件\n"
             "  scai dirs            查看最大文件夹\n"
             "  scai tui             打开 TUI 浏览\n"
             "  scai explain PATH    解释某个文件或目录\n"
@@ -1374,6 +1458,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     top_parser = subparsers.add_parser("top", help="按文件大小输出 Top N。")
     add_common_args(top_parser, "扫描根目录，默认是当前目录。")
+
+    more_parser = subparsers.add_parser("more", help=f"显示更多最大文件，默认 Top {DEFAULT_MORE_LIMIT}。")
+    add_common_args(more_parser, "扫描根目录，默认是当前目录。", default_limit=DEFAULT_MORE_LIMIT)
 
     dirs_parser = subparsers.add_parser("dirs", help="按目录聚合后的总大小输出 Top N 文件夹。")
     add_dirs_args(dirs_parser)
@@ -1510,20 +1597,30 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
 def run_top(args: argparse.Namespace) -> int:
     root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
     start = time.time()
-    records, stats = scan_top_files(root=root, limit=args.limit, include_all=args.all)
+    records, stats = run_with_progress(
+        f"Scai 正在扫描 {root}",
+        lambda: scan_top_files(root=root, limit=args.limit, include_all=args.all),
+    )
     elapsed = time.time() - start
     print_file_results(root=root, records=records, stats=stats, elapsed=elapsed, include_all=args.all)
     return 0
 
 
+def run_more(args: argparse.Namespace) -> int:
+    return run_top(args)
+
+
 def run_dirs(args: argparse.Namespace) -> int:
     root = COMPUTER_SCAN_ROOT if args.computer else Path(args.root).expanduser().resolve()
     start = time.time()
-    records, stats = scan_top_dirs(
-        root=root,
-        limit=args.limit,
-        include_all=args.all,
-        max_depth=args.max_depth,
+    records, stats = run_with_progress(
+        f"Scai 正在扫描 {root}",
+        lambda: scan_top_dirs(
+            root=root,
+            limit=args.limit,
+            include_all=args.all,
+            max_depth=args.max_depth,
+        ),
     )
     print_directory_results(root=root, records=records, stats=stats, elapsed=time.time() - start, include_all=args.all)
     return 0
@@ -1565,6 +1662,8 @@ def main() -> int:
         return run_brief(args)
     if args.command == "top":
         return run_top(args)
+    if args.command == "more":
+        return run_more(args)
     if args.command == "dirs":
         return run_dirs(args)
     if args.command == "explain":

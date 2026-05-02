@@ -11,6 +11,8 @@ Scai is not meant to be only another `du` wrapper. The goal is to scan disk usag
 ## Features
 
 - CLI-first Space Brief as the default experience.
+- Dynamic scan progress in interactive terminals.
+- Top 50 file details in the default brief, with `scai more` for longer lists.
 - TUI browser for interactive exploration.
 - Rule analysis engine for caches, build artifacts, archives, media, backups, data files, and risky system paths.
 - Cleanup plan generation with no deletion side effects.
@@ -40,6 +42,8 @@ Make sure `$HOME/bin` is in your `PATH`.
 scai              # Space Brief for the current directory
 scai all          # safe full-computer scan from /
 scai top          # largest files
+scai more         # show more largest files, default Top 100
+scai more 200     # show Top 200 largest files
 scai dirs         # largest folders
 scai tui          # open TUI browser
 scai explain PATH # explain one file or folder
@@ -53,13 +57,14 @@ Short forms still work:
 scai 50
 scai d
 scai all
+scai more
 scai ~/Downloads
 scai --plain ~/Downloads 30
 ```
 
 ## Default Brief
 
-`scai` scans the current directory by default and prints a high-signal CLI overview instead of opening the TUI. Use `scai all` for a safe full-computer scan from `/`; use `--all` only when you explicitly want to disable default exclusions.
+`scai` scans the current directory by default and prints a high-signal CLI overview instead of opening the TUI. In an interactive terminal it shows a live scanning spinner with elapsed time before printing results. Use `scai all` for a safe full-computer scan from `/`; use `--all` only when you explicitly want to disable default exclusions.
 
 ```text
 Scai Space Brief
@@ -74,6 +79,15 @@ Scai Space Brief
 需要确认:
   - 历史备份/归档: 约 12.4 GB
   - 大媒体文件: 约 21.8 GB
+
+Top 50 文件明细:
+  编号          大小  风险        分类              文件
+   1      3.2 GB  需要确认      大媒体文件           videos/demo.mov
+   2      1.8 GB  需要确认      压缩包/镜像          Downloads/archive.zip
+
+显示更多:
+  - scai more        显示 Top 100 文件
+  - scai more 200    显示 Top 200 文件
 
 下一步:
   - scai top          查看最大文件
