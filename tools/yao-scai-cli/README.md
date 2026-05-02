@@ -125,6 +125,8 @@ TUI keys:
 - `[` / `]`: adjust `max-depth` in directory mode.
 - `?`: show or hide help.
 
+The bottom panel follows the current selection and shows available metadata such as name, type, size, extension, modified/access/created times, permissions, owner/group, inode, relative path, absolute path, parent folder, risk category, and the safer next action.
+
 ## Rule Analysis
 
 Scai classifies scan results into risk levels:

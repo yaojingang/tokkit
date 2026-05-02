@@ -9,6 +9,7 @@ import locale
 import os
 import re
 import shutil
+import stat as statlib
 import subprocess
 import sys
 import tempfile
@@ -217,6 +218,12 @@ def format_mtime(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def format_timestamp(timestamp: float | None) -> str:
+    if not timestamp or timestamp <= 0:
+        return "-"
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def truncate_middle(text: str, width: int) -> str:
     if len(text) <= width:
         return text
@@ -410,6 +417,114 @@ def display_name(path: Path, root: Path) -> str:
         return str(relative)
     except ValueError:
         return str(path)
+
+
+def owner_group_name(uid: int, gid: int) -> tuple[str, str]:
+    try:
+        import grp
+        import pwd
+
+        owner = pwd.getpwuid(uid).pw_name
+        group = grp.getgrgid(gid).gr_name
+        return owner, group
+    except (ImportError, KeyError, OSError):
+        return str(uid), str(gid)
+
+
+def path_kind_label(path: Path, mode: int | None) -> str:
+    try:
+        if path.is_symlink():
+            return "符号链接"
+    except OSError:
+        pass
+
+    if mode is None:
+        return "未知"
+    if statlib.S_ISDIR(mode):
+        return "目录"
+    if statlib.S_ISREG(mode):
+        return "文件"
+    if statlib.S_ISLNK(mode):
+        return "符号链接"
+    if statlib.S_ISSOCK(mode):
+        return "Socket"
+    if statlib.S_ISFIFO(mode):
+        return "FIFO"
+    if statlib.S_ISCHR(mode):
+        return "字符设备"
+    if statlib.S_ISBLK(mode):
+        return "块设备"
+    return "其他"
+
+
+def selected_record_detail_lines(
+    root: Path,
+    record: FileRecord | DirectoryRecord,
+    mode: str,
+    max_width: int,
+) -> list[str]:
+    path = record.path
+    cached_kind = "目录" if isinstance(record, DirectoryRecord) or mode == "dirs" else "文件"
+    try:
+        file_stat = path.lstat()
+        stat_error = ""
+    except OSError as exc:
+        file_stat = None
+        stat_error = str(exc)
+
+    insight = classify_path(path, record.size, "dir" if isinstance(record, DirectoryRecord) else "file")
+    kind = path_kind_label(path, file_stat.st_mode if file_stat else None) if file_stat else cached_kind
+    relative = display_name(path, root)
+    filename = path.name or str(path)
+    parent = str(path.parent)
+    absolute = str(path)
+    format_name = "目录" if isinstance(record, DirectoryRecord) else infer_format(path)
+    owner = group = "-"
+    mode_text = inode = device = hard_links = "-"
+    accessed = changed = created = "-"
+    symlink_target = ""
+
+    if file_stat:
+        owner, group = owner_group_name(file_stat.st_uid, file_stat.st_gid)
+        mode_text = f"{statlib.filemode(file_stat.st_mode)} / {oct(statlib.S_IMODE(file_stat.st_mode))}"
+        inode = str(file_stat.st_ino)
+        device = str(file_stat.st_dev)
+        hard_links = str(file_stat.st_nlink)
+        accessed = format_timestamp(file_stat.st_atime)
+        changed = format_timestamp(file_stat.st_ctime)
+        created = format_timestamp(getattr(file_stat, "st_birthtime", None))
+        if statlib.S_ISLNK(file_stat.st_mode):
+            try:
+                symlink_target = os.readlink(path)
+            except OSError:
+                symlink_target = "读取失败"
+
+    size_detail = f"{human_size(record.size)} / {record.size:,} B"
+    if isinstance(record, DirectoryRecord):
+        size_label = "聚合大小"
+        count_line = f"文件数: {record.file_count:,}"
+    else:
+        size_label = "大小"
+        count_line = f"扩展名: {format_name}"
+
+    lines = [
+        "选中项详情",
+        f"名称: {filename}",
+        f"绝对路径: {absolute}",
+        f"相对路径: {relative}",
+        f"类型: {kind} | {size_label}: {size_detail} | 风险: {risk_label(insight.risk)} | 分类: {insight.category}",
+        f"修改: {format_timestamp(record.mtime)} | 访问: {accessed} | 创建: {created} | 状态变更: {changed}",
+        f"{count_line} | 权限: {mode_text} | 所有者: {owner}:{group} | 链接数: {hard_links}",
+        f"Inode: {inode} | Device: {device}",
+        f"父目录: {parent}",
+        f"建议: {insight.action}",
+    ]
+    if symlink_target:
+        lines.insert(8, f"链接目标: {symlink_target}")
+    if stat_error:
+        lines.insert(2, f"状态: 无法读取完整元数据: {stat_error}")
+
+    return [truncate_middle(line, max_width) for line in lines]
 
 
 def print_scan_summary(root: Path, stats: ScanStats, elapsed: float, include_all: bool) -> None:
@@ -1261,6 +1376,20 @@ class ScaiTui:
             return 0
         return curses.color_pair(pair)
 
+    def detail_panel_height(self, height: int) -> int:
+        if height < 18:
+            return 0
+        if height < 24:
+            return 5
+        if height < 32:
+            return 8
+        return min(12, max(9, height // 3))
+
+    def list_visible_rows(self, height: int) -> int:
+        detail_height = self.detail_panel_height(height)
+        list_bottom = height - detail_height - 1 if detail_height else height - 1
+        return max(1, list_bottom - 8)
+
     def handle_key(self, stdscr: curses.window, key: int) -> bool:
         if key in (ord("q"), ord("Q"), 27):
             return True
@@ -1349,7 +1478,7 @@ class ScaiTui:
             return
         self.selected = max(0, min(len(result.records) - 1, self.selected + delta))
         height = shutil.get_terminal_size((120, 24)).lines
-        visible_rows = max(1, height - 8)
+        visible_rows = self.list_visible_rows(height)
         if self.selected < self.scroll:
             self.scroll = self.selected
         elif self.selected >= self.scroll + visible_rows:
@@ -1441,6 +1570,7 @@ class ScaiTui:
             self.draw_dir_rows(stdscr, result, height, width)
         else:
             self.draw_file_rows(stdscr, result, height, width)
+        self.draw_detail_panel(stdscr, result, height, width)
 
         if self.show_help:
             self.draw_help(stdscr, height, width)
@@ -1448,7 +1578,7 @@ class ScaiTui:
     def draw_file_rows(self, stdscr: curses.window, result: TuiScanResult, height: int, width: int) -> None:
         self.safe_addstr(stdscr, 6, 0, f"{'#':>3}  {'大小':>10}  {'格式':<8}  {'最近修改':<16}  文件")
         self.safe_addstr(stdscr, 7, 0, "-" * (width - 1))
-        visible = max(1, height - 10)
+        visible = self.list_visible_rows(height)
         path_width = max(20, width - 45)
 
         for row, record in enumerate(result.records[self.scroll : self.scroll + visible], start=0):
@@ -1462,7 +1592,7 @@ class ScaiTui:
     def draw_dir_rows(self, stdscr: curses.window, result: TuiScanResult, height: int, width: int) -> None:
         self.safe_addstr(stdscr, 6, 0, f"{'#':>3}  {'总大小':>10}  {'文件数':>7}  {'最近修改':<16}  文件夹")
         self.safe_addstr(stdscr, 7, 0, "-" * (width - 1))
-        visible = max(1, height - 10)
+        visible = self.list_visible_rows(height)
         path_width = max(20, width - 45)
 
         for row, record in enumerate(result.records[self.scroll : self.scroll + visible], start=0):
@@ -1472,6 +1602,26 @@ class ScaiTui:
             name = truncate_middle(display_name(record.path, result.root), path_width)
             line = f"{index + 1:>3}  {human_size(record.size):>10}  {record.file_count:>7}  {format_mtime(record.mtime)[:16]:<16}  {name}"
             self.safe_addstr(stdscr, 8 + row, 0, truncate_middle(line, width - 1), attr)
+
+    def draw_detail_panel(self, stdscr: curses.window, result: TuiScanResult, height: int, width: int) -> None:
+        panel_height = self.detail_panel_height(height)
+        if panel_height <= 0 or not result.records:
+            return
+
+        start_y = height - panel_height - 1
+        if start_y <= 8:
+            return
+
+        selected_index = max(0, min(len(result.records) - 1, self.selected))
+        record = result.records[selected_index]
+        max_width = max(20, width - 1)
+        lines = selected_record_detail_lines(result.root, record, result.mode, max_width)
+
+        self.safe_addstr(stdscr, start_y, 0, "-" * (width - 1), self.color(2))
+        for offset in range(1, panel_height):
+            line = lines[offset - 1] if offset - 1 < len(lines) else ""
+            attr = (self.color(2) | curses.A_BOLD) if offset == 1 else 0
+            self.safe_addstr(stdscr, start_y + offset, 0, line.ljust(width - 1), attr)
 
     def draw_help(self, stdscr: curses.window, height: int, width: int) -> None:
         lines = [
