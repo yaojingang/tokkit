@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-DEFAULT_SCAN_ROOT = Path.home()
+DEFAULT_SCAN_ROOT = Path.cwd()
 DEFAULT_LIMIT = 20
 DEFAULT_BRIEF_LIMIT = 12
 DEFAULT_ANALYSIS_LIMIT = 80
@@ -82,7 +82,7 @@ COMMAND_ALIASES = {
     "p": "plan",
     "ai": "ai",
 }
-COMPUTER_ROOT_ALIASES = {"c", "computer", "mac", "root", "全盘", "电脑", "根目录"}
+COMPUTER_ROOT_ALIASES = {"all", "c", "computer", "mac", "root", "全盘", "电脑", "根目录"}
 OPTIONS_REQUIRING_VALUE = {"--limit", "--max-depth", "--mode", "--timeout"}
 TUI_ALIASES: set[str] = set()
 PLAIN_ALIASES: set[str] = set()
@@ -1286,7 +1286,7 @@ class ScaiTui:
             "帮助",
             "j/k 或 ↑/↓ 滚动，PageUp/PageDown 快速滚动",
             "f 文件模式，d 文件夹模式，r 重新扫描",
-            "/ 输入路径，c 扫描电脑根目录，h 回到用户目录，. 当前目录",
+            "/ 输入路径，c 扫描电脑根目录，h 回到启动目录，. 当前目录",
             "+/- 调整 Top 数量，a 切换默认排除，[/] 调整目录深度",
             "q 退出，? 关闭帮助",
         ]
@@ -1332,17 +1332,17 @@ def add_common_args(parser: argparse.ArgumentParser, help_text: str, default_lim
     parser.add_argument(
         "--all",
         action="store_true",
-        help="不跳过默认排除目录，做全量扫描。",
+        help="不跳过默认排除目录。注意：scai all 表示从 / 开始安全扫描，不等于 --all。",
     )
     parser.add_argument(
         "--computer",
         action="store_true",
-        help="从电脑根目录 / 开始扫描；默认仍会跳过系统和缓存目录。",
+        help="从电脑根目录 / 开始安全扫描；默认仍会跳过系统和缓存目录。",
     )
 
 
 def add_dirs_args(parser: argparse.ArgumentParser) -> None:
-    add_common_args(parser, "扫描根目录，默认是当前用户主目录。")
+    add_common_args(parser, "扫描根目录，默认是当前目录。")
     parser.add_argument(
         "--max-depth",
         type=int,
@@ -1357,6 +1357,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "核心用法:\n"
             "  scai                 输出 Space Brief 智能概览\n"
+            "  scai all             从电脑根目录 / 开始安全扫描\n"
             "  scai top             查看最大文件\n"
             "  scai dirs            查看最大文件夹\n"
             "  scai tui             打开 TUI 浏览\n"
@@ -1369,16 +1370,16 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     brief_parser = subparsers.add_parser("brief", help="输出默认 Space Brief 智能概览。")
-    add_common_args(brief_parser, "扫描根目录，默认是当前用户主目录。", default_limit=DEFAULT_BRIEF_LIMIT)
+    add_common_args(brief_parser, "扫描根目录，默认是当前目录。", default_limit=DEFAULT_BRIEF_LIMIT)
 
     top_parser = subparsers.add_parser("top", help="按文件大小输出 Top N。")
-    add_common_args(top_parser, "扫描根目录，默认是当前用户主目录。")
+    add_common_args(top_parser, "扫描根目录，默认是当前目录。")
 
     dirs_parser = subparsers.add_parser("dirs", help="按目录聚合后的总大小输出 Top N 文件夹。")
     add_dirs_args(dirs_parser)
 
     tui_parser = subparsers.add_parser("tui", help="打开 TUI 浏览文件或文件夹。")
-    add_common_args(tui_parser, "扫描根目录，默认是当前用户主目录。")
+    add_common_args(tui_parser, "扫描根目录，默认是当前目录。")
     tui_parser.add_argument("--mode", choices=("files", "dirs"), default="files", help="TUI 初始模式，默认 files。")
     tui_parser.add_argument("--max-depth", type=int, help="目录模式只展示不超过指定层级的文件夹。")
 
@@ -1388,10 +1389,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     plan_parser = subparsers.add_parser("plan", help="生成释放指定空间的清理方案，不执行删除。")
     plan_parser.add_argument("target", help="目标释放空间，例如 10g、500m。")
-    add_common_args(plan_parser, "扫描根目录，默认是当前用户主目录。", default_limit=DEFAULT_ANALYSIS_LIMIT)
+    add_common_args(plan_parser, "扫描根目录，默认是当前目录。", default_limit=DEFAULT_ANALYSIS_LIMIT)
 
     ai_parser = subparsers.add_parser("ai", help="用 Codex CLI 对扫描摘要做 AI 诊断。")
-    add_common_args(ai_parser, "扫描根目录，默认是当前用户主目录。", default_limit=DEFAULT_BRIEF_LIMIT)
+    add_common_args(ai_parser, "扫描根目录，默认是当前目录。", default_limit=DEFAULT_BRIEF_LIMIT)
     ai_parser.add_argument("--timeout", type=int, default=180, help="Codex 分析超时时间，默认 180 秒。")
 
     return parser
@@ -1476,10 +1477,6 @@ def normalize_command_args(command: str, raw_args: list[str]) -> list[str]:
 
         if arg.isdecimal():
             normalized.extend(["--limit", arg])
-            continue
-
-        if lowered == "all":
-            normalized.append("--all")
             continue
 
         normalized.append(arg)

@@ -37,7 +37,8 @@ Make sure `$HOME/bin` is in your `PATH`.
 ## Core Commands
 
 ```bash
-scai              # Space Brief: CLI smart overview
+scai              # Space Brief for the current directory
+scai all          # safe full-computer scan from /
 scai top          # largest files
 scai dirs         # largest folders
 scai tui          # open TUI browser
@@ -51,14 +52,14 @@ Short forms still work:
 ```bash
 scai 50
 scai d
-scai c
+scai all
 scai ~/Downloads
 scai --plain ~/Downloads 30
 ```
 
 ## Default Brief
 
-`scai` now prints a high-signal CLI overview instead of opening the TUI:
+`scai` scans the current directory by default and prints a high-signal CLI overview instead of opening the TUI. Use `scai all` for a safe full-computer scan from `/`; use `--all` only when you explicitly want to disable default exclusions.
 
 ```text
 Scai Space Brief
@@ -102,7 +103,7 @@ TUI keys:
 - `d`: switch to directory mode.
 - `/`: enter a new scan path.
 - `c`: scan from `/`.
-- `h`: return to the user home directory.
+- `h`: return to the directory where Scai started.
 - `.`: scan the current working directory.
 - `+/-`: adjust the result limit.
 - `a`: toggle default exclusions.
@@ -126,6 +127,7 @@ The first version is intentionally conservative. It explains why an item was cla
 ```bash
 scai plan 10g
 scai plan 500m ~/Downloads
+scai plan 20g all
 scai plan 20g ~/Projects --all
 ```
 
