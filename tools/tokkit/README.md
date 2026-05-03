@@ -4,27 +4,25 @@
 
 [Product brief](docs/PRODUCT_BRIEF.md) | [Positioning & roadmap](docs/POSITIONING_AND_ROADMAP.md) | [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
 
-TokKit is the lightweight, local-first usage ledger for AI coding tools.
-It helps individual developers track tokens, cost, models, terminals, and
-clients across Codex, Claude Code, Warp, Kaku, Cursor, CodeBuddy, Augment,
-ChatGPT exports, GitHub Copilot metrics exports, Trae task history, and similar desktop workflows
-without requiring SDK instrumentation for log-based sources. The core CLI is
-`tokkit`, with `tok` as the operator shortcut and `tokstat` kept as a compatibility alias.
+TokKit is a lightweight, local-first usage ledger for AI coding tools.
 
-In one sentence:
+It helps developers answer a simple question that most AI coding workflows do
+not answer well: **where did my tokens and AI coding spend go?** TokKit scans
+local tool logs, official exports, and optional runtime capture/proxy records,
+then normalizes the results into one local SQLite ledger with reports by date,
+model, terminal, client, source, token direction, and estimated cost.
 
-- TokKit is a lightweight, local-first ledger that turns fragmented AI
-  coding tool usage into one honest, terminal-first account of tokens and
-  cost.
+The main operator command is `tok`. The lower-level CLI is `tokkit`.
+`tokstat` is kept as a compatibility alias.
 
-## Examples
+## Demo
 
 These examples use the same synthetic demo dataset: source report totals scaled
 5x, with the Claude Code Opus 4.6 / 4.7 mix boosted.
 
 [Open the interactive HTML demo report](docs/assets/tokkit-demo-5x-claude-opus.html)
 
-TUI dashboard:
+TUI-style demo dashboard:
 
 ![TokKit TUI demo screenshot](docs/assets/tokkit-tui-demo-5x-claude-opus.svg)
 
@@ -32,277 +30,272 @@ CLI report:
 
 ![TokKit CLI demo screenshot](docs/assets/tokkit-cli-demo-5x-claude-opus.svg)
 
-## Why it is different
+## Why TokKit Exists
 
-Most LLM observability products assume you own the application and can add
-instrumentation. TokKit starts from a different assumption: you are using
-several AI coding tools on one machine and need one trustworthy local ledger.
+AI coding work is increasingly split across desktop apps, terminal agents, IDE
+extensions, local proxies, official exports, and vendor dashboards. A single
+developer may use Codex, Claude Code, Warp, Cursor, Augment, CodeBuddy, Trae,
+ChatGPT, and GitHub Copilot in the same week.
 
-What TokKit emphasizes:
+The problem is that usage data is fragmented:
 
-- Lightweight by design: one local SQLite ledger, one terminal workflow, no
-  hosted dashboard requirement
-- Local-first by default: data stays on your machine unless you export it
-- Honest accounting: `exact`, `partial`, and `estimated` are explicit instead
-  of being mixed together
-- Built for AI coding tools: terminals, desktop assistants, IDE extensions,
-  and local proxies
-- Low-friction adoption: scan local logs where possible, proxy only where
-  exact accounting needs request/response usage
-- Personal operator workflow: daily reports, trends, pricing, shell
-  autosuggest, and fast CLI output
-- Fast local diagnostics: `tok doctor` explains setup state, coverage, and likely next steps
-- Guided local onboarding: `tok setup` inspects the current machine state and can apply common setup steps
+- Some tools expose exact token usage in local JSONL logs.
+- Some only expose conversation totals or credits.
+- Some require official exports or API reports.
+- Some can only be estimated from local cached text.
+- Vendor dashboards rarely explain terminal/client/model usage in one place.
 
-## Supported sources
+TokKit turns those fragments into one local ledger. It does not pretend every
+number has the same precision. Each record keeps a method label:
 
-- Codex Desktop and Codex CLI
-- Warp AI / Agent Mode
-- Kaku Assistant through an OpenAI-compatible local proxy
-- ChatGPT official data export (`conversations.json` or export zip)
-- GitHub Copilot official usage metrics exports or API-backed user reports
-- Cursor from local sentry telemetry estimation
-- CodeBuddy from local task-history estimation
-- Trae task-history usage recovery when local `ui_messages.json` includes token fields
+- `exact`: upstream logs or responses include concrete token fields.
+- `partial`: useful totals exist, but some dimensions are missing.
+- `estimated`: TokKit reconstructs usage from local cached text or metadata.
 
-All normalized records are stored in `~/.tokkit/usage.sqlite` by default. If an
-existing `~/.tokstat` directory is present, TokKit will continue using it
-unless you move to the new path.
+This makes reports useful without hiding uncertainty.
 
-## Accuracy model
+## How It Works
 
-- `exact`: vendor logs or upstream responses expose concrete usage values
-- `partial`: useful totals exist, but per-day or per-direction detail is limited
-- `estimated`: usage is reconstructed from local cached text, not provider usage
+TokKit follows a local-first pipeline:
 
-Current source behavior:
+1. **Discover sources**: find known local logs, session files, official export
+   files, capture files, and optional proxy records.
+2. **Scan incrementally**: first scan can inspect all configured sources; later
+   scans reuse checkpoints and active-target planning so common reports stay
+   fast.
+3. **Normalize records**: store all usage rows in `~/.tokkit/usage.sqlite` with
+   source, app, model, terminal/client hints, token fields, method, timestamp,
+   and metadata.
+4. **Estimate cost locally**: apply built-in pricing profiles and optional
+   overrides from `~/.tokkit/pricing.json`.
+5. **Render reports**: produce terminal tables, JSON, client coverage reports,
+   budget views, and static interactive HTML dashboards.
 
-- Codex: exact for `input_tokens`, `output_tokens`, `cached_input_tokens`, and `reasoning_tokens`
-- Claude Code: exact from local Claude session JSONL, including VS Code entrypoints when present
-- Kaku proxy: exact when the upstream response includes OpenAI-style `usage`
-- Warp: partial for historical day-level backfill because local data is conversation-based
-- ChatGPT export: estimated from official exported conversation text, useful for longitudinal local accounting rather than billable usage
-- GitHub Copilot usage metrics: partial from official usage-metrics exports and report APIs; CLI prompt/output tokens are available, while IDE plugin metrics expose activity and LoC rather than IDE token totals
-- Cursor: estimated from local sentry `ex_hs2` events, useful for directional local accounting rather than billable usage
-- CodeBuddy: estimated from locally cached task text
-- Trae: exact for detected `huohuaai.huohuaai` task history entries that include `tokensIn/tokensOut` in local `ui_messages.json`; native Trae logs alone are still not enough
-- Augment: TokKit can estimate historical local usage from persisted request selection context and checkpoint diffs, and can capture exact usage from new Augment requests by patching the local VS Code extension at runtime and scanning `~/.tokkit/augment-usage.ndjson`
+Generated local files:
+
+- SQLite ledger: `~/.tokkit/usage.sqlite`
+- HTML and text reports: `~/.tokkit/reports/`
+- Logs and scan state: `~/.tokkit/logs/` and related state files
+- Augment runtime capture, when enabled: `~/.tokkit/augment-usage.ndjson`
+
+TokKit also keeps compatibility with older `~/.tokstat` paths where practical.
 
 ## Highlights
 
-- One ledger across tools instead of separate vendor dashboards
-- Lightweight local CLI instead of a hosted observability stack
-- Honest reporting instead of pretending every number is equally precise
-- Daily and multi-day summaries with grouped tables and trend charts
-- Model, terminal, source, and client coverage breakdowns
-- Local pricing overrides and estimated API cost views
-- Budget tracking for today, last 7 days, and month-to-date
-- Automatic scan and daily report support via `launchd`
-- Fast operator UX with `tok`, inline hints, autosuggest, and completion
+- One local ledger across many AI coding tools.
+- No hosted dashboard required; data stays on your machine by default.
+- Exact, partial, and estimated usage are explicitly separated.
+- Reports by date, source, terminal, client, model, prompt, output, cached
+  prompt, reasoning tokens, unsplit totals, estimated dollars, credits, and
+  records.
+- Interactive HTML report with Simplified Chinese by default, English toggle,
+  sticky navigation, range switching, model filters, and chart tooltips.
+- Incremental scanning and active-target planning keep repeated reports fast.
+- Built-in model pricing plus local override support.
+- Budget checks for today, last 7 days, and month-to-date.
+- `tok doctor` and `tok setup` for local diagnostics and guided onboarding.
+- Optional `launchd` automation for hourly scans and daily reports on macOS.
+- Augment runtime capture hook for exact usage on new requests, plus historical
+  local estimates.
+- JSON output for scripting and downstream analysis.
 
-## Install in 3 steps
+## Supported Sources
+
+Current source behavior:
+
+- **Codex Desktop / Codex CLI**: exact usage from local logs, including prompt,
+  output, cached prompt, and reasoning tokens.
+- **Claude Code**: exact usage from local Claude session JSONL, including
+  detectable VS Code entrypoints.
+- **Warp**: partial usage from local conversation/accounting data, including
+  vendor credits where available.
+- **Kaku Assistant**: exact when routed through TokKit's OpenAI-compatible local
+  proxy and the upstream response includes OpenAI-style `usage`.
+- **Augment**: estimated historical local usage from persisted request
+  selection context and checkpoint diffs; exact usage for new requests when the
+  local VS Code extension capture hook is installed.
+- **ChatGPT export**: estimated usage from official exported conversation text.
+- **GitHub Copilot usage metrics**: partial usage from official usage metrics
+  export files or GitHub API reports; Copilot CLI token totals are supported
+  when present.
+- **Cursor**: estimated usage from local sentry telemetry events.
+- **CodeBuddy**: estimated usage from local task-history text.
+- **Trae**: exact task usage when local `ui_messages.json` files include
+  `tokensIn` and `tokensOut`.
+
+## Install and Download
+
+TokKit currently lives inside this repository under `tools/tokkit`.
+
+### Option 1: clone and install editable
+
+This is the recommended development/local-operator install:
 
 ```bash
-cd "/path/to/tokkit"
+git clone https://github.com/yaojingang/yao-cli-tools.git
+cd yao-cli-tools/tools/tokkit
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e .
 ```
 
-That installs:
+### Option 2: install directly from GitHub
 
-- `tokkit`
-- `tok`
-- `tokstat` compatibility alias
+Use this when you want the command without keeping a working checkout:
 
-If you already had an older editable install, rerun `python3 -m pip install -e .`
-to pick up the `tok` entry point.
+```bash
+python3 -m pip install "git+https://github.com/yaojingang/yao-cli-tools.git#subdirectory=tools/tokkit"
+```
 
-## First-run flow
+### Installed commands
 
-1. Verify the install and available commands:
+- `tok`: operator shortcut for daily use
+- `tokkit`: lower-level CLI
+- `tokstat`: compatibility alias
+
+Requirements:
+
+- Python 3.10+
+- macOS is the best-supported local desktop environment today
+- `gh` is needed only for GitHub Copilot API-backed report scanning
+
+## Quick Start
+
+After installation:
 
 ```bash
 tok help
 tok setup
 tok doctor
-tok pricing
-tok budget
-tok augment status
-tok scan chatgpt
-tok scan chatgpt ~/Downloads/chatgpt-export.zip
+tok today
+tok last 7
+tok html month
 ```
 
-2. See your first report:
+Common first scans:
+
+```bash
+tok scan codex
+tok scan claude-code
+tok scan augment
+tok scan chatgpt ~/Downloads/chatgpt-export.zip
+tok scan copilot --org your-org
+tok scan trae
+tok scan all
+```
+
+`tok scan all` bootstraps from all known sources once. After that, TokKit
+prefers recent active targets so repeated report generation is faster. Use
+`--full` when you want to rebuild the scan plan:
+
+```bash
+tok scan all --full
+```
+
+## Daily Usage
+
+Human-readable reports:
 
 ```bash
 tok today
-tok last 7
+tok yesterday
+tok 2026-05-03
+tok week
+tok month
+tok last 14
 ```
 
-3. If you prefer the lower-level CLI:
+Client coverage reports:
 
 ```bash
-tokkit report-daily --date today --timezone Asia/Shanghai
-tokkit report-range --last 7 --timezone Asia/Shanghai
+tok clients today
+tok clients week
+tok clients month
+tok clients last 30
 ```
 
-4. If you use Augment in VS Code, install the local runtime capture hook once. `tok scan augment` will then scan both exact runtime capture and historical local estimates:
+JSON output:
 
 ```bash
-tok augment install
-tok scan augment
+tok json today
+tok json last 7
+tok json clients month
 ```
 
-## Optional setup paths
-
-Use the guided setup command if you want one place to inspect or apply the common local steps:
+HTML reports:
 
 ```bash
-tok setup
-tok setup --install-launchd --scan-mode codex
-tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https://api.vivgrid.com/v1
-tok budget init
-tok augment install
-tok scan chatgpt
-tok scan copilot --org your-org
-tok scan trae
+tok html
+tok html week
+tok html last 14
+tok html month
 ```
 
-### Manual scanning
+Generated HTML reports are static files under `~/.tokkit/reports/`. They can be
+opened locally, shared as artifacts, or used as a starting point for demos.
 
-Scan all supported adapters explicitly:
+Report directory helpers:
+
+```bash
+tok files
+tok open
+```
+
+## Lower-Level CLI Commands
+
+The `tok` shortcut wraps the lower-level `tokkit` CLI. Equivalent direct
+commands include:
 
 ```bash
 tokkit scan-all --timezone Asia/Shanghai
-```
-
-### Precision for Kaku
-
-To capture Kaku usage precisely, run the local OpenAI-compatible proxy and
-point Kaku at it:
-
-```bash
-tokkit serve-proxy \
-  --host 127.0.0.1 \
-  --port 8765 \
-  --upstream-base-url https://api.vivgrid.com/v1 \
-  --timezone Asia/Shanghai
-```
-
-Then set:
-
-```toml
-base_url = "http://127.0.0.1:8765"
-```
-
-### Automatic mode on macOS
-
-Install the LaunchAgents if you want hourly scans and a daily report at
-`00:05`:
-
-```bash
-./scripts/install_launchd.sh
-```
-
-Remove them with:
-
-```bash
-./scripts/uninstall_launchd.sh
-```
-
-## Report commands
-
-The operator shortcut auto-scans before rendering reports:
-
-```bash
-tok today
-tok last 7
-```
-
-Lower-level equivalents:
-
-```bash
 tokkit report-daily --date today --timezone Asia/Shanghai
 tokkit report-range --last 7 --timezone Asia/Shanghai
-tokkit report-clients --date today --timezone Asia/Shanghai
-tokkit report-clients --last 7 --timezone Asia/Shanghai
+tokkit report-clients --last 30 --timezone Asia/Shanghai
+tokkit report-html --last 30 --open
+tokkit serve-proxy --host 127.0.0.1 --port 8765 --upstream-base-url https://api.example.com/v1
 ```
 
-## Report views
+## Reports and Fields
 
-Daily report:
+Core token fields:
 
-- totals
-- by hour
-- by terminal
-- by model
-- by source
-- estimated API cost for priced exact records
+- `Total`: total tokens reported or reconstructed for the row.
+- `Prompt`: input/prompt tokens, including cached prompt tokens when upstream
+  reports them that way.
+- `Output`: generated output tokens.
+- `Cached Prompt`: prompt tokens that were served from cache.
+- `Reasoning`: reasoning tokens when the provider exposes them.
+- `Unsplit`: totals that could not be safely split into prompt/output fields.
+- `Est.$`: local estimated API cost for priced records.
+- `Credits`: vendor credit units, kept separate from dollars.
+- `Records`: number of normalized usage records behind the row.
 
-Range report:
+Why prompt can be much larger than output:
 
-- total-token trend chart
-- date-merged summary
-- by terminal
-- by model
-- by source detail
-- estimated API cost for priced exact records
+- AI coding agents resend large repository context, tool traces, file excerpts,
+  and conversation history.
+- Cached prompt tokens still count as prompt volume, even when priced lower.
+- Output is often a short patch, command, or explanation compared with the
+  context needed to produce it.
 
-Client report:
+## Pricing and Budgets
 
-- blended totals
-- by measurement method
-- by date
-- by client coverage
-
-## Shell workflow
-
-If you use the optional `tok` shortcut, common flows become:
+View built-in pricing:
 
 ```bash
-tok help
-tok setup
-tok doctor
 tok pricing
-tok budget
-tok augment status
-tok today
-tok last 7
-tok clients month
-tok scan warp
+tok pricing json
 ```
 
-`tok` defaults to auto-scan before report commands and shows a lightweight
-loading indicator while scanning. You can disable or scope that behavior with:
+Create a budget file:
 
 ```bash
-TOK_AUTO_SCAN_BEFORE_REPORTS=0 tok today
-TOK_AUTO_SCAN_TARGET=codex tok last 7
+tok budget init
+tok budget
+tok budget json
 ```
 
-Cost notes:
-
-- `Est.$` is a local API cost estimate based on built-in model pricing profiles
-- `tok pricing` shows the current built-in price table used by `Est.$`
-- if `~/.tokkit/pricing.json` exists, TokKit merges it over the built-in table
-- legacy `~/.tokstat/pricing.json` continues to work if you are still on the old home directory
-- `tok pricing` marks every row as `built-in` or `override`
-- `tok budget` compares today, last 7 days, and month-to-date spend against your local budget file
-- `tok budget init` creates a starter `~/.tokkit/budget.json`
-- `tok doctor` summarizes local setup, launchd automation, and client coverage in one report
-- `tok setup` can apply common local steps such as home migration, Kaku proxy configuration, and launchd install
-- `tok augment install` patches the local Augment VS Code extension so new requests can emit exact usage into `~/.tokkit/augment-usage.ndjson`
-- `tok augment status` shows whether the Augment capture hook and capture file are in place
-- `tok scan augment` ingests `~/.tokkit/augment-usage.ndjson` into the SQLite ledger
-- `tok scan copilot --org <org>` pulls official GitHub Copilot user usage-metrics report download links via `gh api` and ingests CLI token totals
-- `tok scan copilot --export-file <path>` ingests downloaded Copilot usage-metrics JSON/NDJSON/zip exports
-- `tok scan trae` ingests exact token fields from detected Trae task-history `ui_messages.json` files when those local task logs are available
-- `Credits` remains separate for sources like Warp that expose vendor credits
-- partial sources may show `Input/Output/Cached/Reasoning` as `-` and `Est.$` as `-`
-  when only conversation-level totals are available
-
-Override example:
+Override pricing by creating `~/.tokkit/pricing.json`:
 
 ```json
 {
@@ -319,32 +312,94 @@ Override example:
 }
 ```
 
-Generated files:
+Notes:
 
-- database: `~/.tokkit/usage.sqlite`
-- reports: `~/.tokkit/reports/YYYY-MM-DD.txt`
-- logs: `~/.tokkit/logs/*.log`
+- `Est.$` is a local estimate, not a vendor bill.
+- Pricing profiles may lag provider pricing changes unless updated.
+- Partial or estimated sources may not have enough fields for cost estimates.
+- Warp-style credits remain in `Credits` and are not converted to dollars.
 
-## Recommended first release framing
+## Augment Capture
 
-TokKit should be presented as:
+TokKit can estimate historical Augment usage from local workspace state. For
+new requests, it can also install a local VS Code extension capture hook:
 
-- a Mac-first local CLI alpha
-- best for people using several AI coding tools on one machine
-- strongest today on daily reporting, trend visibility, and usage honesty
+```bash
+tok augment status
+tok augment install
+tok scan augment
+tok augment remove
+```
 
-## Publish notes
+When installed, new Augment usage events are written to:
 
-Repository planning and release packaging notes live in:
+```text
+~/.tokkit/augment-usage.ndjson
+```
 
-- `docs/PRODUCT_BRIEF.md`
-- `docs/POSITIONING_AND_ROADMAP.md`
-- `docs/POSITIONING_AND_ROADMAP.zh-CN.md`
-- `docs/GITHUB_PUBLISH_PLAN.md`
+Then `tok scan augment` imports those events into the SQLite ledger.
 
-## Further reading
+## Kaku Proxy Mode
 
-- `docs/PRODUCT_BRIEF.md`
-- `docs/POSITIONING_AND_ROADMAP.md`
-- `docs/POSITIONING_AND_ROADMAP.zh-CN.md`
-- `docs/GITHUB_PUBLISH_PLAN.md`
+For tools that can point to an OpenAI-compatible endpoint, TokKit can capture
+exact usage through a local proxy:
+
+```bash
+tokkit serve-proxy \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --upstream-base-url https://api.example.com/v1 \
+  --timezone Asia/Shanghai
+```
+
+Then configure the client to use:
+
+```toml
+base_url = "http://127.0.0.1:8765"
+```
+
+## macOS Automation
+
+Install LaunchAgents for recurring local scans and daily reports:
+
+```bash
+./scripts/install_launchd.sh
+```
+
+Remove them:
+
+```bash
+./scripts/uninstall_launchd.sh
+```
+
+## Environment Variables
+
+```bash
+TOK_AUTO_SCAN_BEFORE_REPORTS=0 tok today
+TOK_AUTO_SCAN_TARGET=codex tok last 7
+TOK_AUTO_SCAN_TARGET=all tok month
+```
+
+`TOK_AUTO_SCAN_TARGET` supports:
+
+```text
+all, codex, claude-code, augment, chatgpt, copilot, warp, codebuddy, cursor, trae
+```
+
+## Accuracy and Privacy
+
+TokKit is designed for local personal accounting. It is not a replacement for
+provider billing dashboards.
+
+- Data stays local by default.
+- Official exports and local logs may contain private prompts or file context.
+- Share generated reports only after reviewing what they contain.
+- Estimated sources are useful for trend tracking, not invoice reconciliation.
+- Exact records are still only as reliable as the upstream log or response.
+
+## Further Reading
+
+- [Product brief](docs/PRODUCT_BRIEF.md)
+- [Positioning and roadmap](docs/POSITIONING_AND_ROADMAP.md)
+- [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
+- [GitHub publish plan](docs/GITHUB_PUBLISH_PLAN.md)

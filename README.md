@@ -1,32 +1,89 @@
 # yao-cli-tools
 
-A growing collection of small CLI tools by Yao.
+A continuously updated collection of small, practical CLI tools by Yao.
 
-## Scope
+This repository is for focused utilities that solve real local workflow
+problems: developer productivity, AI coding operations, local diagnostics,
+terminal dashboards, and small automation helpers. Tools start small, stay
+usable from the command line, and can grow into standalone packages when they
+prove useful.
 
-This repository is intended for:
+中文说明：这个仓库会持续更新各种实用小工具，主要面向本地命令行工作流、
+AI 编码辅助、开发者诊断、效率工具和可复用自动化脚本。每个工具会尽量保持
+独立、轻量、可直接运行，并在各自目录下提供安装和使用说明。
 
-- focused command-line utilities
-- reusable scripts that can later become standalone packages
-- small experiments that are useful enough to keep and share
+## Current Tools
+
+### [TokKit](tools/tokkit/README.md)
+
+TokKit is a lightweight, local-first usage ledger for AI coding tools. It
+collects usage from local logs, official exports, and optional proxy/capture
+paths, then turns fragmented AI coding activity into one local account of
+tokens, estimated cost, models, terminals, and client coverage.
+
+Highlights:
+
+- Tracks Codex, Claude Code, Warp, Augment, Cursor, CodeBuddy, Trae, ChatGPT
+  exports, GitHub Copilot usage metrics, and similar AI coding workflows.
+- Keeps data in a local SQLite database under `~/.tokkit`.
+- Separates `exact`, `partial`, and `estimated` records instead of mixing
+  different accuracy levels.
+- Provides terminal reports, JSON output, client coverage views, budget checks,
+  pricing overrides, and interactive HTML reports.
+- Includes synthetic demo assets for CLI, TUI-style, and HTML reporting examples.
+
+Quick start:
+
+```bash
+git clone https://github.com/yaojingang/yao-cli-tools.git
+cd yao-cli-tools/tools/tokkit
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -e .
+tok help
+tok setup
+tok today
+tok html month
+```
+
+### [yao-scai-cli](tools/yao-scai-cli/README.md)
+
+`yao-scai-cli` is an AI-native disk space scanner and advisor. It is designed
+for finding large files and directories, reviewing space usage through CLI/TUI
+flows, and building toward safer AI-assisted cleanup recommendations.
+
+## Repository Direction
+
+This repo will keep growing with small tools that are useful enough to share.
+The intended pattern is:
+
+- each tool lives under `tools/<tool-name>/`
+- each tool has its own README, install instructions, and usage examples
+- dependencies stay narrow and explicit
+- tools should do one clear job well before growing in scope
+- local-first workflows are preferred where privacy and speed matter
+
+Planned updates may include:
+
+- more AI coding workflow utilities
+- local reporting and diagnostic helpers
+- terminal-first productivity tools
+- reusable scripts that graduate into packaged CLIs
 
 ## Layout
 
-- `tools/`: individual tools or small packages
-- `tools/tokkit`: local-first usage ledger for AI coding tools
-- `tools/yao-scai-cli`: AI-native disk space scanner and advisor
+- `tools/`: individual tools and small packages
+- `tools/tokkit`: AI coding usage ledger and report generator
+- `tools/yao-scai-cli`: disk space scanner and advisor
 
-## Current tools
+## Contributing Notes
 
-- [`tools/tokkit`](tools/tokkit/README.md): track tokens, cost, models, terminals, and clients across local AI coding workflows
-- [`tools/yao-scai-cli`](tools/yao-scai-cli/README.md): scan large files and folders with CLI/TUI workflows and planned AI cleanup guidance
+This is a personal tools repository, but the structure is intentionally simple:
 
-## Publishing Rules
-
-- each tool should have its own README
-- each tool should document install and usage steps
-- keep dependencies narrow and explicit
-- prefer shipping tools that solve one clear problem well
+- keep each tool self-contained
+- document install and usage steps in that tool's README
+- avoid unnecessary global dependencies
+- prefer readable CLI behavior over hidden automation
 
 ## License
 

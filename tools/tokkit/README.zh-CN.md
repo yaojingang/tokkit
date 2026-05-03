@@ -4,16 +4,16 @@
 
 [产品简介](docs/PRODUCT_BRIEF.md) | [Positioning & roadmap](docs/POSITIONING_AND_ROADMAP.md) | [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
 
-TokKit 是一个轻量化、本地优先的 AI 编码工具使用量台账。它面向
-Codex、Claude Code、Warp、Kaku、Cursor、CodeBuddy、Augment、Trae 等桌面工作流，把分散在本机日志、代理响应
-以及 ChatGPT / GitHub Copilot 导出文件和会话聚合数据里的 token、成本、模型、终端和客户端统一到账本里；对于
-基于本地日志的来源，不要求 SDK 埋点。核心 CLI 是 `tokkit`，更偏操作流
-的快捷命令是 `tok`，`tokstat` 作为兼容别名保留。
+TokKit 是一个轻量化、本地优先的 AI 编码工具使用量台账。
 
-一句话定位：
+它解决的是一个很实际的问题：**我在各种 AI 编码工具上到底消耗了多少
+token，成本主要花在哪里？** TokKit 会扫描本地工具日志、官方导出文件、
+可选的运行时 capture 文件或本地代理记录，然后把这些碎片化 usage 统一
+写入本地 SQLite 台账，最后按日期、模型、终端、客户端、来源、token
+方向和预估成本生成报表。
 
-- TokKit 是一个轻量化、本地优先、终端优先的 AI 编码工具总账，把碎片化
-  usage 变成一份诚实、可解释的 token 和成本台账。
+日常使用建议直接用 `tok`。更底层的 CLI 是 `tokkit`。`tokstat` 作为旧版
+兼容别名保留。
 
 ## 示例
 
@@ -22,7 +22,7 @@ Claude Code Opus 4.6 / 4.7 的消耗占比。
 
 [打开交互式 HTML 示例报告](docs/assets/tokkit-demo-5x-claude-opus.html)
 
-TUI 仪表盘：
+TUI 风格示例仪表盘：
 
 ![TokKit TUI demo screenshot](docs/assets/tokkit-tui-demo-5x-claude-opus.svg)
 
@@ -30,279 +30,262 @@ CLI 报表：
 
 ![TokKit CLI demo screenshot](docs/assets/tokkit-cli-demo-5x-claude-opus.svg)
 
-## 它和通用方案有什么不同
+## 为什么需要 TokKit
 
-大多数 LLM observability 产品默认你拥有应用本身，并且可以接入埋点。
-TokKit 的出发点不同：你是在一台电脑上同时使用多个 AI 编码工具，需要
-一份可信的本地账本，而不是一整套云端平台。
+AI 编码工作现在经常分散在桌面应用、终端 agent、IDE 插件、本地代理、
+官方导出文件和供应商后台里。同一个开发者一周内可能同时使用 Codex、
+Claude Code、Warp、Cursor、Augment、CodeBuddy、Trae、ChatGPT 和
+GitHub Copilot。
 
-TokKit 重点强化的是：
+问题是 usage 数据非常分散：
 
-- 轻量化：一个本地 SQLite 台账、一套终端工作流，不依赖托管仪表盘
-- 本地优先：数据默认留在本机，除非你主动导出
-- 对精度诚实：`exact`、`partial`、`estimated` 明确区分
-- 面向 AI 编码工具：终端助手、桌面客户端、IDE 扩展、本地代理
-- 低接入成本：能读本地日志就不要求埋点，只有需要精确 usage 时才走代理
-- 适合个人使用：日报、趋势、定价、灰色提示、自动补全都直接在终端完成
-- 本地诊断直接可用：`tok doctor` 会把配置状态、覆盖率和下一步动作集中说明
-- 引导式安装可直接执行：`tok setup` 会检查当前状态，并可顺手完成常见配置动作
+- 有的工具在本地 JSONL 日志里暴露精确 token。
+- 有的工具只有会话总量或 credits。
+- 有的工具需要官方导出或 API 报表。
+- 有的工具只能根据本地缓存文本做估算。
+- 供应商后台通常无法统一解释终端、客户端和模型维度的消耗。
 
-## 当前支持的数据来源
+TokKit 的目标是把这些碎片整合成一份本地总账。它不会假装所有数字都同样
+精确，而是给每条记录保留统计方法：
 
-- Codex Desktop 和 Codex CLI
-- Warp AI / Agent Mode
-- 通过 OpenAI-compatible 本地代理接入的 Kaku Assistant
-- ChatGPT 官方数据导出（`conversations.json` 或导出 zip）
-- GitHub Copilot 官方 usage metrics 导出或 API 用户级报表
-- 基于本地 sentry 遥测做估算的 Cursor
-- 基于本地任务历史做估算的 CodeBuddy
-- 当本地 `ui_messages.json` 含 token 字段时，可恢复 Trae 任务历史 usage
+- `exact`：上游日志或响应里有明确 token 字段。
+- `partial`：能拿到有用总量，但缺少某些维度。
+- `estimated`：TokKit 根据本地缓存文本或元数据重建出来的估算。
 
-所有归一化后的记录都保存在：
+这样既能看趋势和结构，也不会隐藏不确定性。
 
-- 默认是 `~/.tokkit/usage.sqlite`
-- 如果你的机器上已经有 `~/.tokstat`，TokKit 会继续兼容使用旧目录
+## 工作逻辑
 
-## 精度模型
+TokKit 的核心流程是本地优先的数据管道：
 
-- `exact`：供应商日志或上游响应里直接暴露了明确 usage
-- `partial`：能拿到总量，但拿不到按日或按方向拆分
-- `estimated`：根据本地缓存文本离线重算，不是供应商账单
+1. **发现来源**：查找已知本地日志、会话文件、官方导出文件、capture 文件
+   和可选代理记录。
+2. **增量扫描**：首次可以全量扫描所有已配置来源；后续扫描复用 checkpoint
+   和活跃目标规划，让常用报表保持较快速度。
+3. **归一化记录**：把所有 usage 写入 `~/.tokkit/usage.sqlite`，统一记录
+   source、app、model、terminal/client 线索、token 字段、method、时间和
+   metadata。
+4. **本地估价**：使用内置价格表和可选的 `~/.tokkit/pricing.json` 覆盖文件
+   计算 `Est.$`。
+5. **生成报表**：输出终端表格、JSON、客户端覆盖率、预算视图和静态交互式
+   HTML 仪表盘。
 
-当前各来源的实际情况：
+本地生成物：
 
-- Codex：可精确拿到 `input_tokens`、`output_tokens`、`cached_input_tokens`、`reasoning_tokens`
-- Claude Code：可以从本地 Claude session JSONL 精确统计，包含可识别的 VS Code 入口
-- Kaku proxy：如果上游响应带 OpenAI 风格 `usage`，就能精确统计
-- Warp：本地更适合拿会话级 token 总量和 credits，历史按日拆分是 `partial`
-- ChatGPT 导出：根据官方导出的会话文本做估算，因此是 `estimated`，适合做长期本地台账，不应视为账单口径
-- GitHub Copilot usage metrics：来自官方 usage metrics 导出或 API，因此是 `partial`；其中 Copilot CLI 的 prompt/output token 可用，但 IDE 插件公开的是活跃度和 LoC，不是 IDE token 总数
-- Cursor：可以从本地 sentry `ex_hs2` 事件做方向性估算，因此是 `estimated`，不应视为账单口径
-- CodeBuddy：根据本地任务文本估算，因此是 `estimated`
-- Trae：如果检测到 `huohuaai.huohuaai` 的本地任务历史，并且 `ui_messages.json` 里带有 `tokensIn/tokensOut`，TokKit 可以精确导入这些任务的 token；仅靠原生 Trae 日志本身仍然不够
-- Augment：TokKit 可以根据本地持久化的 request selection context 和 checkpoint diff 对历史使用量做估算；同时也可以通过给本地 VS Code 扩展打运行时 capture hook 的方式，抓到后续新请求的精确 usage，并扫描 `~/.tokkit/augment-usage.ndjson`
+- SQLite 台账：`~/.tokkit/usage.sqlite`
+- HTML 和文本报表：`~/.tokkit/reports/`
+- 日志和扫描状态：`~/.tokkit/logs/` 及相关状态文件
+- Augment 运行时 capture：`~/.tokkit/augment-usage.ndjson`
 
-## 核心特点
+如果机器上已经存在旧版 `~/.tokstat` 目录，TokKit 会尽量保持兼容。
 
-- 一个总账，而不是每家工具一个面板
-- 一个轻量化、本地 CLI，而不是一套重型 observability 平台
-- 对精度诚实，不把 `partial` 和 `estimated` 伪装成 `exact`
-- 支持日报、多日报表格和趋势图
-- 支持模型、终端、来源、客户端覆盖率分析
-- 支持本地价格覆盖和估算成本视图
-- 支持查看今天、最近 7 天和本月累计的预算状态
-- 支持通过 `launchd` 自动扫描和自动日报
-- 支持 `tok`、灰色提示、自动补全等终端体验增强
+## 亮点
 
-## 3 步安装
+- 多个 AI 编码工具统一到一个本地台账。
+- 默认不需要托管后台，数据留在本机。
+- 明确区分 `exact`、`partial` 和 `estimated`，不混淆精度。
+- 支持按日期、来源、终端、客户端、模型、Prompt、Output、Cached Prompt、
+  Reasoning、Unsplit、预估美元、Credits、Records 聚合。
+- 交互式 HTML 报告默认简体中文，支持英文切换、置顶导航、时间范围切换、
+  模型筛选和图表 tooltip。
+- 增量扫描和活跃目标规划，让重复统计更快。
+- 内置模型价格表，并支持本地价格覆盖。
+- 支持今天、最近 7 天和本月累计预算检查。
+- `tok doctor` 和 `tok setup` 提供本地诊断与引导式配置。
+- macOS 可选 `launchd` 自动扫描和自动日报。
+- Augment 支持历史本地估算，也支持对新请求做运行时精确 capture。
+- 支持 JSON 输出，方便脚本和后续分析。
+
+## 支持的数据来源
+
+当前各来源的行为：
+
+- **Codex Desktop / Codex CLI**：从本地日志精确统计 Prompt、Output、
+  Cached Prompt 和 Reasoning tokens。
+- **Claude Code**：从本地 Claude session JSONL 精确统计，并识别可检测到的
+  VS Code 入口。
+- **Warp**：从本地会话/账户数据做 partial 统计，保留可用的 vendor credits。
+- **Kaku Assistant**：通过 TokKit 的 OpenAI-compatible 本地代理转发时，如果
+  上游响应带 OpenAI 风格 `usage`，可以精确统计。
+- **Augment**：根据本地 request selection context 和 checkpoint diff 估算
+  历史 usage；安装本地 VS Code 扩展 capture hook 后，可精确捕获新请求。
+- **ChatGPT export**：根据官方导出的会话文本做估算。
+- **GitHub Copilot usage metrics**：从官方 usage metrics 导出或 GitHub API
+  报表做 partial 统计；当报表里包含 Copilot CLI token 总量时可以导入。
+- **Cursor**：根据本地 sentry telemetry 事件做估算。
+- **CodeBuddy**：根据本地任务历史文本做估算。
+- **Trae**：如果本地 `ui_messages.json` 带有 `tokensIn` 和 `tokensOut`，可以
+  精确导入对应任务 usage。
+
+## 下载与安装
+
+TokKit 目前位于本仓库的 `tools/tokkit` 目录。
+
+### 方式一：克隆仓库并 editable 安装
+
+这是推荐的本地使用和开发安装方式：
 
 ```bash
-cd "/path/to/tokkit"
+git clone https://github.com/yaojingang/yao-cli-tools.git
+cd yao-cli-tools/tools/tokkit
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e .
 ```
 
-安装后会得到这些命令：
+### 方式二：直接从 GitHub 安装
 
-- `tokkit`
-- `tok`
-- `tokstat` 兼容别名
-
-如果你之前已经做过较早版本的 editable install，再执行一次：
+如果你只想安装命令，不想保留工作区：
 
 ```bash
-python3 -m pip install -e .
+python3 -m pip install "git+https://github.com/yaojingang/yao-cli-tools.git#subdirectory=tools/tokkit"
 ```
 
-这样可以拿到新的 `tok` 入口。
+### 安装后的命令
 
-## 首次使用流程
+- `tok`：日常操作入口
+- `tokkit`：底层 CLI
+- `tokstat`：兼容旧命令
 
-1. 先确认命令已经安装好：
+要求：
+
+- Python 3.10+
+- 当前最适合 macOS 本地桌面环境
+- 只有扫描 GitHub Copilot API 报表时才需要 `gh`
+
+## 快速开始
+
+安装完成后：
 
 ```bash
 tok help
 tok setup
 tok doctor
-tok pricing
-tok budget
-tok augment status
-tok scan chatgpt
-tok scan chatgpt ~/Downloads/chatgpt-export.zip
+tok today
+tok last 7
+tok html month
 ```
 
-2. 直接看第一份报表：
+常见首次扫描：
+
+```bash
+tok scan codex
+tok scan claude-code
+tok scan augment
+tok scan chatgpt ~/Downloads/chatgpt-export.zip
+tok scan copilot --org your-org
+tok scan trae
+tok scan all
+```
+
+`tok scan all` 首次会从所有已知来源 bootstrap。后续 TokKit 会优先扫描最近
+活跃的目标，让重复统计更快。如果需要重新全量规划，可以加 `--full`：
+
+```bash
+tok scan all --full
+```
+
+## 日常使用
+
+可读报表：
 
 ```bash
 tok today
-tok last 7
+tok yesterday
+tok 2026-05-03
+tok week
+tok month
+tok last 14
 ```
 
-3. 如果你更喜欢底层 CLI，也可以直接执行：
+客户端覆盖率：
 
 ```bash
-tokkit report-daily --date today --timezone Asia/Shanghai
-tokkit report-range --last 7 --timezone Asia/Shanghai
+tok clients today
+tok clients week
+tok clients month
+tok clients last 30
 ```
 
-4. 如果你在 VS Code 里使用 Augment，可以先装一次本地运行时 capture hook。`tok scan augment` 会同时扫描新的精确 capture 和历史本地估算：
+JSON 输出：
 
 ```bash
-tok augment install
-tok scan augment
+tok json today
+tok json last 7
+tok json clients month
 ```
 
-## 可选接入路径
-
-如果你希望把常见安装步骤收敛到一个命令里，可以直接用：
+HTML 报告：
 
 ```bash
-tok setup
-tok setup --install-launchd --scan-mode codex
-tok setup --enable-kaku-proxy --install-launchd --kaku-upstream-base-url https://api.vivgrid.com/v1
-tok budget init
-tok augment install
-tok scan chatgpt
-tok scan copilot --org your-org
-tok scan trae
+tok html
+tok html week
+tok html last 14
+tok html month
 ```
 
-### 手动扫描
+HTML 报告会生成在 `~/.tokkit/reports/`，是静态文件，可以本地打开、作为
+artifact 分享，或用于演示。
 
-显式扫描所有支持的适配器：
+报表目录辅助命令：
+
+```bash
+tok files
+tok open
+```
+
+## 底层 CLI 命令
+
+`tok` 是更方便的操作入口，底层仍然可以直接使用 `tokkit`：
 
 ```bash
 tokkit scan-all --timezone Asia/Shanghai
-```
-
-### Kaku 精确统计
-
-如果你想精确统计 Kaku 的 token，可以先启动本地 OpenAI-compatible 代理：
-
-```bash
-tokkit serve-proxy \
-  --host 127.0.0.1 \
-  --port 8765 \
-  --upstream-base-url https://api.vivgrid.com/v1 \
-  --timezone Asia/Shanghai
-```
-
-然后把 Kaku 指向本地代理：
-
-```toml
-base_url = "http://127.0.0.1:8765"
-```
-
-### macOS 自动模式
-
-如果你希望它自动运行，可以安装 LaunchAgents。安装后会：
-
-- 每小时扫描一次
-- 每天 `00:05` 自动生成前一天日报
-
-安装：
-
-```bash
-./scripts/install_launchd.sh
-```
-
-卸载：
-
-```bash
-./scripts/uninstall_launchd.sh
-```
-
-## 报表命令
-
-更偏操作流的 `tok` 命令会在出报表前自动扫描：
-
-```bash
-tok today
-tok last 7
-```
-
-底层 CLI 等价命令：
-
-```bash
 tokkit report-daily --date today --timezone Asia/Shanghai
 tokkit report-range --last 7 --timezone Asia/Shanghai
-tokkit report-clients --date today --timezone Asia/Shanghai
-tokkit report-clients --last 7 --timezone Asia/Shanghai
+tokkit report-clients --last 30 --timezone Asia/Shanghai
+tokkit report-html --last 30 --open
+tokkit serve-proxy --host 127.0.0.1 --port 8765 --upstream-base-url https://api.example.com/v1
 ```
 
-## 报表视图
+## 报表字段说明
 
-日报：
+核心字段：
 
-- totals
-- by hour
-- by terminal
-- by model
-- by source
-- 对可计价的 `exact` 记录给出 `Est.$`
+- `Total`：当前行的总 token。
+- `Prompt`：输入/提示词 token；如果上游把缓存上下文也计入 input，这里也会
+  包含 Cached Prompt。
+- `Output`：模型生成输出 token。
+- `Cached Prompt`：命中缓存的 Prompt token。
+- `Reasoning`：供应商暴露的 reasoning token。
+- `Unsplit`：只能拿到总量、无法安全拆成 Prompt/Output 的 token。
+- `Est.$`：本地估算的 API 成本。
+- `Credits`：供应商 credits，和美元分开保留。
+- `Records`：当前行背后的归一化记录数量。
 
-区间报表：
+为什么 Prompt 往往远大于 Output：
 
-- total-token 趋势图
-- 按日期合并汇总
-- by terminal
-- by model
-- by source 明细
-- 对可计价的 `exact` 记录给出 `Est.$`
+- AI 编码 agent 会反复发送仓库上下文、工具调用轨迹、文件片段和对话历史。
+- Cached Prompt 仍然是 Prompt 体量，只是通常价格更低。
+- Output 常常只是 patch、命令或解释，远小于生成它所需要的上下文。
 
-客户端报表：
+## 价格与预算
 
-- blended totals
-- 按 measurement method 聚合
-- 按日期聚合
-- 客户端覆盖率视图
-
-## Shell 工作流
-
-常用命令：
+查看内置价格：
 
 ```bash
-tok help
-tok setup
-tok doctor
 tok pricing
-tok budget
-tok augment status
-tok today
-tok last 7
-tok clients month
-tok scan warp
+tok pricing json
 ```
 
-`tok` 默认会在报表命令前自动扫描，并在扫描时显示轻量级加载提示。你也可以通过环境变量调整：
+创建预算文件：
 
 ```bash
-TOK_AUTO_SCAN_BEFORE_REPORTS=0 tok today
-TOK_AUTO_SCAN_TARGET=codex tok last 7
+tok budget init
+tok budget
+tok budget json
 ```
 
-## 成本说明
-
-- `Est.$` 是本地 API 成本估算，不是供应商最终账单
-- `tok pricing` 可以查看当前 `Est.$` 使用的价格表
-- 如果存在 `~/.tokkit/pricing.json`，TokKit 会在内置价格表之上做覆盖
-- 如果你还在使用旧目录，`~/.tokstat/pricing.json` 也会继续兼容
-- `tok pricing` 会标出每一条价格来自 `built-in` 还是 `override`
-- `tok budget` 会把今天、最近 7 天和本月累计的消耗与你的本地预算做对比
-- `tok budget init` 会生成一份 `~/.tokkit/budget.json` 模板
-- `tok doctor` 会集中展示本地配置、自动化状态和客户端覆盖率
-- `tok setup` 可以顺手执行常见本地配置，比如迁移 home、切 Kaku proxy、安装 launchd
-- `tok augment install` 会给本地 Augment VS Code 扩展打上 capture hook，让后续新请求把精确 usage 写进 `~/.tokkit/augment-usage.ndjson`
-- `tok augment status` 可以查看 Augment capture hook 和 capture 文件是否已经就位
-- `tok scan augment` 会把 `~/.tokkit/augment-usage.ndjson` 导入 SQLite 台账
-- `tok scan copilot --org <org>` 会通过 `gh api` 拉 GitHub Copilot 官方用户级 usage metrics 报表并导入其中的 CLI token 总量
-- `tok scan copilot --export-file <path>` 会导入已经下载好的 Copilot usage metrics JSON/NDJSON/zip 导出
-- `tok scan trae` 会在本地存在 Trae 任务历史且带 token 字段时，把这些 `ui_messages.json` 里的精确 token 导入 SQLite 台账
-- `Credits` 会继续保留给 Warp 这类直接提供 credits 的来源
-- `partial` 来源如果拿不到方向拆分，`Input/Output/Cached/Reasoning` 会显示 `-`
-
-价格覆盖文件示例：
+通过 `~/.tokkit/pricing.json` 覆盖价格：
 
 ```json
 {
@@ -319,15 +302,93 @@ TOK_AUTO_SCAN_TARGET=codex tok last 7
 }
 ```
 
-生成物位置：
+说明：
 
-- 数据库：`~/.tokkit/usage.sqlite`
-- 日报：`~/.tokkit/reports/YYYY-MM-DD.txt`
-- 日志：`~/.tokkit/logs/*.log`
+- `Est.$` 是本地估算，不是供应商账单。
+- 模型价格变化后需要更新内置价格或本地覆盖文件。
+- `partial` 和 `estimated` 来源可能没有足够字段用于估价。
+- Warp 这类 credits 会保留在 `Credits`，不会自动换算成美元。
+
+## Augment Capture
+
+TokKit 可以估算历史 Augment 使用量。对于新请求，也可以安装本地 VS Code
+扩展 capture hook：
+
+```bash
+tok augment status
+tok augment install
+tok scan augment
+tok augment remove
+```
+
+安装后，新 Augment usage 会写入：
+
+```text
+~/.tokkit/augment-usage.ndjson
+```
+
+然后通过 `tok scan augment` 导入 SQLite 台账。
+
+## Kaku 代理模式
+
+对于可以配置 OpenAI-compatible endpoint 的工具，TokKit 可以通过本地代理
+捕获精确 usage：
+
+```bash
+tokkit serve-proxy \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --upstream-base-url https://api.example.com/v1 \
+  --timezone Asia/Shanghai
+```
+
+然后把客户端指向：
+
+```toml
+base_url = "http://127.0.0.1:8765"
+```
+
+## macOS 自动化
+
+安装 LaunchAgents 后可以周期性扫描和生成日报：
+
+```bash
+./scripts/install_launchd.sh
+```
+
+卸载：
+
+```bash
+./scripts/uninstall_launchd.sh
+```
+
+## 环境变量
+
+```bash
+TOK_AUTO_SCAN_BEFORE_REPORTS=0 tok today
+TOK_AUTO_SCAN_TARGET=codex tok last 7
+TOK_AUTO_SCAN_TARGET=all tok month
+```
+
+`TOK_AUTO_SCAN_TARGET` 支持：
+
+```text
+all, codex, claude-code, augment, chatgpt, copilot, warp, codebuddy, cursor, trae
+```
+
+## 准确性与隐私
+
+TokKit 面向个人本地用量台账，不替代供应商账单后台。
+
+- 数据默认保存在本地。
+- 官方导出和本地日志可能包含私有 prompt 或文件上下文。
+- 分享报告前应先检查内容。
+- `estimated` 更适合趋势分析，不适合对账。
+- `exact` 也取决于上游日志或响应本身是否可靠。
 
 ## 进一步阅读
 
-- `docs/PRODUCT_BRIEF.md`
-- `docs/POSITIONING_AND_ROADMAP.md`
-- `docs/POSITIONING_AND_ROADMAP.zh-CN.md`
-- `docs/GITHUB_PUBLISH_PLAN.md`
+- [产品简介](docs/PRODUCT_BRIEF.md)
+- [Positioning and roadmap](docs/POSITIONING_AND_ROADMAP.md)
+- [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
+- [GitHub 发布计划](docs/GITHUB_PUBLISH_PLAN.md)
