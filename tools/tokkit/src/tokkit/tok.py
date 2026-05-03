@@ -25,6 +25,9 @@ Reports / 报表:
   tok last 7                Show last 7 days / 查看最近 7 天报表
   tok week                  Show last 7 days / 查看最近 7 天报表
   tok month                 Show last 30 days / 查看最近 30 天报表
+  tok html                  Generate an HTML report for last 30 days / 生成最近 30 天 HTML 报告
+  tok html week             Generate an HTML report for last 7 days / 生成最近 7 天 HTML 报告
+  tok html last 14          Generate an HTML report for last N days / 生成最近 N 天 HTML 报告
   tok doctor                Inspect local setup and client coverage / 检查本地配置和客户端覆盖情况
   tok setup                 Inspect or apply common setup steps / 检查或执行常见安装配置步骤
   tok budget                Show budget status for today/week/month / 查看今天、本周、本月预算状态
@@ -100,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     if command == "last":
         days = args[1] if len(args) > 1 else "7"
         return _run_report(["report-range", "--last", days])
+    if command == "html":
+        return _run_html_command(args[1:])
     if _is_date(command):
         return _run_report(["report-daily", "--date", command])
     if command == "scan":
@@ -200,6 +205,43 @@ def _run_json_command(args: list[str]) -> int:
             return _run_report(["report-clients", "--last", "30", "--json"])
         return _run_report(["report-clients", "--date", next_target, "--json"])
     return _run_report(["report-daily", "--date", target, "--json"])
+
+
+def _run_html_command(args: list[str]) -> int:
+    command = ["report-html"]
+    days = "30"
+    idx = 0
+    while idx < len(args):
+        arg = args[idx]
+        if arg == "week":
+            days = "7"
+        elif arg == "month":
+            days = "30"
+        elif arg == "last":
+            days = args[idx + 1] if idx + 1 < len(args) else "30"
+            idx += 1
+        elif arg == "--last":
+            if idx + 1 >= len(args):
+                print("tok: --last requires a day count", file=sys.stderr)
+                return 1
+            days = args[idx + 1]
+            idx += 1
+        elif arg in {"open", "--open"}:
+            command.append("--open")
+        elif arg == "--output":
+            if idx + 1 >= len(args):
+                print("tok: --output requires a path", file=sys.stderr)
+                return 1
+            command.extend([arg, args[idx + 1]])
+            idx += 1
+        elif _is_positive_int(arg):
+            days = arg
+        else:
+            print(f"tok: unsupported html target '{arg}'", file=sys.stderr)
+            return 1
+        idx += 1
+    command.extend(["--last", days])
+    return _run_report(command)
 
 
 def _run_files_command() -> int:
@@ -382,6 +424,10 @@ def _is_date(value: str) -> bool:
     if len(value) != 10:
         return False
     return value[4] == "-" and value[7] == "-" and value.replace("-", "").isdigit()
+
+
+def _is_positive_int(value: str) -> bool:
+    return value.isdigit() and int(value) > 0
 
 
 if __name__ == "__main__":

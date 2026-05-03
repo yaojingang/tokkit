@@ -9,8 +9,8 @@ import sqlite3
 import subprocess
 import sys
 import tomllib
-from datetime import timedelta
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -28,6 +28,7 @@ from .ingest_codex import scan_codex
 from .ingest_cursor import scan_cursor
 from .ingest_trae import scan_trae
 from .ingest_warp import scan_warp
+from .html_report import render_range_html_report
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
 from .scan_planner import ACTIVE_SCAN_LOOKBACK_DAYS, recent_active_targets, record_scan_plan_result, resolve_scan_plan
@@ -199,6 +200,16 @@ def build_parser() -> argparse.ArgumentParser:
     range_cmd = subparsers.add_parser("report-range", help="Show a multi-day summary.")
     range_cmd.add_argument("--last", type=int, default=7, help="Number of days to include.")
     range_cmd.add_argument("--json", action="store_true")
+
+    html_cmd = subparsers.add_parser("report-html", help="Write a static HTML usage dashboard.")
+    html_cmd.add_argument("--last", type=int, default=30, help="Number of days to include.")
+    html_cmd.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to write the HTML report. Defaults to the TokKit reports directory.",
+    )
+    html_cmd.add_argument("--open", action="store_true", help="Open the generated report in the default browser.")
 
     clients_cmd = subparsers.add_parser("report-clients", help="Show cross-client coverage and aggregate totals.")
     window_group = clients_cmd.add_mutually_exclusive_group()
@@ -402,6 +413,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "report-range":
             rendered = render_range_report(conn, args.last, tz, json_mode=args.json)
             print(rendered)
+            return 0
+
+        if args.command == "report-html":
+            output_path = args.output or _default_html_report_path(args.last, tz)
+            rendered = render_html_report(conn, args.last, tz)
+            _emit_html_report(rendered, output_path, open_browser=args.open)
             return 0
 
         if args.command == "report-clients":
@@ -1018,6 +1035,17 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
         ]
     )
     return "\n".join(lines)
+
+
+def render_html_report(conn: sqlite3.Connection, last_days: int, tz) -> str:
+    payload = json.loads(render_range_report(conn, last_days, tz, json_mode=True))
+    generated_at = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+    timezone_name = getattr(tz, "key", None) or str(tz)
+    return render_range_html_report(
+        payload,
+        generated_at=generated_at,
+        timezone_name=timezone_name,
+    )
 
 
 def render_clients_report(
@@ -2592,6 +2620,19 @@ def _emit_rendered(rendered: str, output_path: Path | None) -> None:
         print(f"wrote report to {output_path}")
         return
     print(rendered)
+
+
+def _default_html_report_path(last_days: int, tz) -> Path:
+    report_date = today_string(tz)
+    return default_report_dir() / f"tokkit-last-{last_days}-{report_date}.html"
+
+
+def _emit_html_report(rendered: str, output_path: Path, *, open_browser: bool) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(rendered + "\n", encoding="utf-8")
+    print(f"wrote HTML report to {output_path}")
+    if open_browser:
+        subprocess.run(["open", str(output_path)], check=False)
 
 
 if __name__ == "__main__":
