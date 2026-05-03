@@ -143,8 +143,14 @@ def detect_installed_clients() -> dict[str, bool]:
     }
 
 
-def logical_client_for_usage_row(app: str, source: str) -> str | None:
+def is_codex_desktop_originator(originator: str | None) -> bool:
+    return (originator or "").strip().lower() == "codex desktop"
+
+
+def logical_client_for_usage_row(app: str, source: str, originator: str | None = None) -> str | None:
     if app == "codex" and source == "codex:vscode":
+        if is_codex_desktop_originator(originator):
+            return "codex"
         return "visual-studio-code"
     if app == "codex":
         return "codex"

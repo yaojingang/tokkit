@@ -1,0 +1,41 @@
+[project]
+name = "vidbrief"
+version = "0.1.0"
+description = "Local-first CLI for downloading videos, extracting transcripts, and generating AI reports."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+  "yt-dlp>=2024.12.13",
+]
+keywords = ["ai", "video", "transcript", "yt-dlp", "cli"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Utilities",
+]
+
+[project.optional-dependencies]
+openai = [
+  "openai>=1.0.0",
+]
+test = []
+
+[project.scripts]
+vb = "vidbrief.cli:main"
+vidbrief = "vidbrief.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -2,8 +2,6 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-TokKit now lives in [`yao-cli-tools`](../../README.md) at `tools/tokkit`.
-
 [Product brief](docs/PRODUCT_BRIEF.md) | [Positioning & roadmap](docs/POSITIONING_AND_ROADMAP.md) | [定位与路线图（简体中文）](docs/POSITIONING_AND_ROADMAP.zh-CN.md)
 
 TokKit is the lightweight, local-first usage ledger for AI coding tools.
@@ -22,6 +20,14 @@ In one sentence:
 Example: `tok last 7`
 
 ![TokKit range report example](docs/assets/tokkit-range-report-example.svg)
+
+Example: synthetic TUI demo report (5x usage, Claude Code Opus mix boosted)
+
+![TokKit TUI demo screenshot](docs/assets/tokkit-tui-demo-5x-claude-opus.svg)
+
+Example: synthetic CLI demo report using the same data
+
+![TokKit CLI demo screenshot](docs/assets/tokkit-cli-demo-5x-claude-opus.svg)
 
 Example: `tok help`
 
@@ -98,7 +104,7 @@ Current source behavior:
 ## Install in 3 steps
 
 ```bash
-cd "/path/to/yao-cli-tools/tools/tokkit"
+cd "/path/to/tokkit"
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e .

@@ -87,6 +87,20 @@ def init_db(conn: sqlite3.Connection) -> None:
             last_seen_at TEXT NOT NULL,
             metadata_json TEXT NOT NULL DEFAULT '{}'
         );
+
+        CREATE TABLE IF NOT EXISTS file_scan_state (
+            state_key TEXT PRIMARY KEY,
+            app TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            offset INTEGER NOT NULL DEFAULT 0,
+            file_size INTEGER NOT NULL DEFAULT 0,
+            mtime_ns INTEGER NOT NULL DEFAULT 0,
+            last_scanned_at TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_file_scan_state_app
+            ON file_scan_state(app);
         """
     )
     _ensure_usage_records_columns(conn)
@@ -224,6 +238,60 @@ def upsert_app_scan_state(
             source,
             total_tokens,
             last_seen_at,
+            json_dumps(metadata or {}),
+        ),
+    )
+
+
+def get_file_scan_state(conn: sqlite3.Connection, state_key: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM file_scan_state WHERE state_key = ?",
+        (state_key,),
+    ).fetchone()
+
+
+def upsert_file_scan_state(
+    conn: sqlite3.Connection,
+    *,
+    state_key: str,
+    app: str,
+    file_path: str,
+    offset: int,
+    file_size: int,
+    mtime_ns: int,
+    last_scanned_at: str,
+    metadata: dict[str, Any] | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO file_scan_state (
+            state_key,
+            app,
+            file_path,
+            offset,
+            file_size,
+            mtime_ns,
+            last_scanned_at,
+            metadata_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(state_key) DO UPDATE SET
+            app = excluded.app,
+            file_path = excluded.file_path,
+            offset = excluded.offset,
+            file_size = excluded.file_size,
+            mtime_ns = excluded.mtime_ns,
+            last_scanned_at = excluded.last_scanned_at,
+            metadata_json = excluded.metadata_json
+        """,
+        (
+            state_key,
+            app,
+            file_path,
+            offset,
+            file_size,
+            mtime_ns,
+            last_scanned_at,
             json_dumps(metadata or {}),
         ),
     )

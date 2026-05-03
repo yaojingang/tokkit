@@ -9,14 +9,14 @@ import sqlite3
 import subprocess
 import sys
 import tomllib
-from datetime import timedelta
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
 from .augment_capture import apply_augment_capture_patch, inspect_augment_patch, remove_augment_capture_patch
 from .budget import resolve_budget_config, write_budget_template
-from .clients import CLIENT_DEFINITIONS, detect_installed_clients, logical_client_for_usage_row
+from .clients import CLIENT_DEFINITIONS, detect_installed_clients, is_codex_desktop_originator, logical_client_for_usage_row
 from .db import connect_db
 from .ingest_augment import scan_augment
 from .ingest_augment_history import scan_augment_history
@@ -28,8 +28,10 @@ from .ingest_codex import scan_codex
 from .ingest_cursor import scan_cursor
 from .ingest_trae import scan_trae
 from .ingest_warp import scan_warp
+from .html_report import render_range_html_report
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
+from .scan_planner import ACTIVE_SCAN_LOOKBACK_DAYS, recent_active_targets, record_scan_plan_result, resolve_scan_plan
 from .utils import DEFAULT_DB_PATH, default_augment_capture_path, default_db_path, default_log_dir, default_report_dir, format_float, format_int, get_timezone, parse_timestamp, resolve_app_home, today_string
 
 
@@ -171,6 +173,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     all_cmd.add_argument("--baseline-only-warp", action="store_true")
+    all_cmd.add_argument(
+        "--full",
+        action="store_true",
+        help="Force a full scan and refresh the active scan target list for this terminal session.",
+    )
 
     report_cmd = subparsers.add_parser("report-daily", help="Show a daily usage report.")
     report_cmd.add_argument(
@@ -193,6 +200,16 @@ def build_parser() -> argparse.ArgumentParser:
     range_cmd = subparsers.add_parser("report-range", help="Show a multi-day summary.")
     range_cmd.add_argument("--last", type=int, default=7, help="Number of days to include.")
     range_cmd.add_argument("--json", action="store_true")
+
+    html_cmd = subparsers.add_parser("report-html", help="Write a static HTML usage dashboard.")
+    html_cmd.add_argument("--last", type=int, default=30, help="Number of days to include.")
+    html_cmd.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to write the HTML report. Defaults to the TokKit reports directory.",
+    )
+    html_cmd.add_argument("--open", action="store_true", help="Open the generated report in the default browser.")
 
     clients_cmd = subparsers.add_parser("report-clients", help="Show cross-client coverage and aggregate totals.")
     window_group = clients_cmd.add_mutually_exclusive_group()
@@ -384,61 +401,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "scan-all":
-            codex_stats = scan_codex(conn, codex_home=args.codex_home, tz=tz)
-            claude_stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
-            augment_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
-            augment_history_stats = scan_augment_history(
-                conn,
-                workspace_storage_root=args.augment_workspace_storage_root,
-                tz=tz,
-            )
-            chatgpt_stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
-            copilot_stats = scan_copilot(
-                conn,
-                export_path=args.copilot_export_file,
-                org=None,
-                enterprise=None,
-                day=None,
-                user_login=None,
-                all_users=False,
-                tz=tz,
-            )
-            codebuddy_stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
-            cursor_stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
-            trae_stats = scan_trae(conn, tasks_root=args.trae_tasks_root, tz=tz)
-            warp_stats = scan_warp(
-                conn,
-                warp_db=args.warp_db,
-                tz=tz,
-                baseline_only=args.baseline_only_warp,
-            )
-            print(
-                "scan complete: "
-                f"codex_files={codex_stats.files_scanned} "
-                f"codex_events={codex_stats.records_seen} "
-                f"claude_files={claude_stats.files_scanned} "
-                f"claude_events={claude_stats.records_seen} "
-                f"augment_exact_lines={augment_stats.lines_scanned} "
-                f"augment_exact_records={augment_stats.records_emitted} "
-                f"augment_history_selection_entries={augment_history_stats.selection_entries_seen} "
-                f"augment_history_checkpoints={augment_history_stats.checkpoint_files_seen} "
-                f"augment_history_records={augment_history_stats.request_records_emitted} "
-                f"chatgpt_conversations={chatgpt_stats.conversations_seen} "
-                f"chatgpt_messages={chatgpt_stats.messages_seen} "
-                f"chatgpt_emitted={chatgpt_stats.records_emitted} "
-                f"copilot_rows={copilot_stats.rows_seen} "
-                f"copilot_cli_rows={copilot_stats.cli_rows_seen} "
-                f"copilot_emitted={copilot_stats.records_emitted} "
-                f"codebuddy_tasks={codebuddy_stats.tasks_seen} "
-                f"codebuddy_emitted={codebuddy_stats.records_emitted} "
-                f"cursor_events={cursor_stats.events_seen} "
-                f"cursor_emitted={cursor_stats.records_emitted} "
-                f"trae_tasks={trae_stats.tasks_seen} "
-                f"trae_request_events={trae_stats.request_events_seen} "
-                f"trae_emitted={trae_stats.records_emitted} "
-                f"warp_conversations={warp_stats.conversations_seen} "
-                f"warp_emitted={warp_stats.records_emitted}"
-            )
+            print(_run_scan_all(conn, args, tz))
             return 0
 
         if args.command == "report-daily":
@@ -450,6 +413,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "report-range":
             rendered = render_range_report(conn, args.last, tz, json_mode=args.json)
             print(rendered)
+            return 0
+
+        if args.command == "report-html":
+            output_path = args.output or _default_html_report_path(args.last, tz)
+            rendered = render_html_report(conn, args.last, tz)
+            _emit_html_report(rendered, output_path, open_browser=args.open)
             return 0
 
         if args.command == "report-clients":
@@ -485,6 +454,170 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
+def _run_scan_all(conn: sqlite3.Connection, args, tz) -> str:
+    plan = resolve_scan_plan(force_full=args.full)
+    observed_targets: list[str] = []
+    summary_parts: list[str] = [
+        f"mode={'full' if plan.full_scan else 'targeted'}",
+        f"targets={len(plan.targets)}",
+    ]
+
+    for target in plan.targets:
+        active, parts = _run_scan_target(conn, target, args, tz)
+        if active:
+            observed_targets.append(target)
+        summary_parts.extend(parts)
+
+    persisted_targets = recent_active_targets(
+        conn,
+        tz,
+        lookback_days=ACTIVE_SCAN_LOOKBACK_DAYS,
+    )
+    if not persisted_targets:
+        persisted_targets = tuple(observed_targets)
+
+    record_scan_plan_result(
+        plan,
+        active_targets=persisted_targets,
+        scanned_targets=plan.targets,
+        lookback_days=ACTIVE_SCAN_LOOKBACK_DAYS,
+    )
+    summary_parts.append(f"recent_window_days={ACTIVE_SCAN_LOOKBACK_DAYS}")
+    summary_parts.append(f"active_targets={len(persisted_targets)}")
+    return "scan complete: " + " ".join(summary_parts)
+
+
+def _run_scan_target(conn: sqlite3.Connection, target: str, args, tz) -> tuple[bool, list[str]]:
+    if target == "codex":
+        stats = scan_codex(conn, codex_home=args.codex_home, tz=tz)
+        return (
+            stats.files_scanned > 0 or stats.records_seen > 0,
+            [
+                f"codex_files={stats.files_scanned}",
+                f"codex_events={stats.records_seen}",
+            ],
+        )
+
+    if target == "claude-code":
+        stats = scan_claude_code(conn, claude_home=args.claude_home, tz=tz)
+        return (
+            stats.files_scanned > 0 or stats.records_seen > 0,
+            [
+                f"claude_files={stats.files_scanned}",
+                f"claude_events={stats.records_seen}",
+            ],
+        )
+
+    if target == "augment":
+        exact_stats = scan_augment(conn, capture_file=args.augment_capture_file, tz=tz)
+        history_stats = scan_augment_history(
+            conn,
+            workspace_storage_root=args.augment_workspace_storage_root,
+            tz=tz,
+        )
+        active = any(
+            (
+                exact_stats.lines_scanned > 0,
+                exact_stats.records_emitted > 0,
+                history_stats.selection_entries_seen > 0,
+                history_stats.checkpoint_files_seen > 0,
+                history_stats.request_records_emitted > 0,
+            )
+        )
+        return (
+            active,
+            [
+                f"augment_exact_lines={exact_stats.lines_scanned}",
+                f"augment_exact_records={exact_stats.records_emitted}",
+                f"augment_history_selection_entries={history_stats.selection_entries_seen}",
+                f"augment_history_checkpoints={history_stats.checkpoint_files_seen}",
+                f"augment_history_records={history_stats.request_records_emitted}",
+            ],
+        )
+
+    if target == "chatgpt":
+        stats = scan_chatgpt_export(conn, export_path=args.chatgpt_export_file, tz=tz)
+        return (
+            stats.export_path is not None or stats.conversations_seen > 0 or stats.messages_seen > 0,
+            [
+                f"chatgpt_conversations={stats.conversations_seen}",
+                f"chatgpt_messages={stats.messages_seen}",
+                f"chatgpt_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "copilot":
+        stats = scan_copilot(
+            conn,
+            export_path=args.copilot_export_file,
+            org=None,
+            enterprise=None,
+            day=None,
+            user_login=None,
+            all_users=False,
+            tz=tz,
+        )
+        return (
+            stats.export_path is not None
+            or stats.endpoint is not None
+            or stats.rows_seen > 0
+            or stats.records_emitted > 0,
+            [
+                f"copilot_rows={stats.rows_seen}",
+                f"copilot_cli_rows={stats.cli_rows_seen}",
+                f"copilot_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "codebuddy":
+        stats = scan_codebuddy(conn, tasks_root=args.codebuddy_tasks_root, tz=tz)
+        return (
+            stats.tasks_seen > 0 or stats.records_emitted > 0,
+            [
+                f"codebuddy_tasks={stats.tasks_seen}",
+                f"codebuddy_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "cursor":
+        stats = scan_cursor(conn, sentry_scope_path=args.cursor_sentry_scope, tz=tz)
+        return (
+            stats.events_seen > 0 or stats.records_emitted > 0,
+            [
+                f"cursor_events={stats.events_seen}",
+                f"cursor_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "trae":
+        stats = scan_trae(conn, tasks_root=args.trae_tasks_root, tz=tz)
+        return (
+            stats.tasks_seen > 0 or stats.request_events_seen > 0 or stats.records_emitted > 0,
+            [
+                f"trae_tasks={stats.tasks_seen}",
+                f"trae_request_events={stats.request_events_seen}",
+                f"trae_emitted={stats.records_emitted}",
+            ],
+        )
+
+    if target == "warp":
+        stats = scan_warp(
+            conn,
+            warp_db=args.warp_db,
+            tz=tz,
+            baseline_only=args.baseline_only_warp,
+        )
+        return (
+            stats.conversations_seen > 0 or stats.records_emitted > 0,
+            [
+                f"warp_conversations={stats.conversations_seen}",
+                f"warp_emitted={stats.records_emitted}",
+            ],
+        )
+
+    raise ValueError(f"unsupported scan target: {target}")
+
+
 def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode: bool, tz=None) -> str:
     tz = tz or get_timezone(None)
     totals = conn.execute(
@@ -494,6 +627,17 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             SUM(output_tokens) AS output_tokens,
             SUM(cached_input_tokens) AS cached_input_tokens,
             SUM(reasoning_tokens) AS reasoning_tokens,
+            SUM(
+                CASE
+                    WHEN COALESCE(total_tokens, 0) > 0
+                        AND COALESCE(input_tokens, 0) = 0
+                        AND COALESCE(output_tokens, 0) = 0
+                        AND COALESCE(cached_input_tokens, 0) = 0
+                        AND COALESCE(reasoning_tokens, 0) = 0
+                    THEN COALESCE(total_tokens, 0)
+                    ELSE 0
+                END
+            ) AS unsplit_tokens,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records
@@ -510,18 +654,30 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             source,
             measurement_method,
             COALESCE(model, '') AS model,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             COALESCE(json_extract(metadata_json, '$.model_provider'), '') AS model_provider,
             SUM(input_tokens) AS input_tokens,
             SUM(output_tokens) AS output_tokens,
             SUM(cached_input_tokens) AS cached_input_tokens,
             SUM(reasoning_tokens) AS reasoning_tokens,
+            SUM(
+                CASE
+                    WHEN COALESCE(total_tokens, 0) > 0
+                        AND COALESCE(input_tokens, 0) = 0
+                        AND COALESCE(output_tokens, 0) = 0
+                        AND COALESCE(cached_input_tokens, 0) = 0
+                        AND COALESCE(reasoning_tokens, 0) = 0
+                    THEN COALESCE(total_tokens, 0)
+                    ELSE 0
+                END
+            ) AS unsplit_tokens,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records
         FROM usage_records
         WHERE local_date = ?
-        GROUP BY app, source, measurement_method, model, model_provider
-        ORDER BY total_tokens DESC, credits DESC, app, source, model, model_provider, measurement_method
+        GROUP BY app, source, measurement_method, model, originator, model_provider
+        ORDER BY total_tokens DESC, credits DESC, app, source, model, originator, model_provider, measurement_method
         """,
         (target_date,),
         ).fetchall()
@@ -530,7 +686,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
     by_terminal = _aggregate_usage_rows(
         detailed_rows,
         key_fields=["terminal"],
-        key_builder=lambda row: (_terminal_label(row["app"], row["source"]),),
+        key_builder=lambda row: (_terminal_label(row["app"], row["source"], row.get("originator")),),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["terminal"])),
     )
     by_model = _aggregate_usage_rows(
@@ -539,18 +695,20 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
         key_builder=lambda row: (row["model_label"],),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["model_label"])),
     )
-    by_source = _aggregate_usage_rows(
-        detailed_rows,
-        key_fields=["app", "source", "model_label"],
-        key_builder=lambda row: (row["app"], row["source"], row["model_label"]),
-        sort_key=lambda row: (
-            -int(row["total_tokens"]),
-            -float(row["credits"]),
-            str(row["app"]),
-            str(row["source"]),
-            str(row["model_label"]),
-        ),
-    )
+    by_source = None
+    if json_mode:
+        by_source = _aggregate_usage_rows(
+            detailed_rows,
+            key_fields=["app", "source", "originator", "model_label"],
+            key_builder=lambda row: (row["app"], row["source"], row.get("originator", ""), row["model_label"]),
+            sort_key=lambda row: (
+                -int(row["total_tokens"]),
+                -float(row["credits"]),
+                str(row["app"]),
+                str(_source_label(row["app"], row["source"], row.get("originator"))),
+                str(row["model_label"]),
+            ),
+        )
     by_hour = _aggregate_hourly_usage_rows(conn, target_date, tz)
 
     if json_mode:
@@ -562,7 +720,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             "by_hour": by_hour,
             "by_terminal": by_terminal,
             "by_model": by_model,
-            "by_source": by_source,
+            "by_source": by_source or [],
         }
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
@@ -571,10 +729,11 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
         "",
         (
             "Totals: "
-            f"input={format_int(totals['input_tokens'])} "
+            f"prompt={format_int(totals['input_tokens'])} "
             f"output={format_int(totals['output_tokens'])} "
-            f"cached={format_int(totals['cached_input_tokens'])} "
+            f"cached_prompt={format_int(totals['cached_input_tokens'])} "
             f"reasoning={format_int(totals['reasoning_tokens'])} "
+            f"unsplit={format_int(totals['unsplit_tokens'])} "
             f"total={format_int(totals['total_tokens'])} "
             f"est_usd={format_float(estimated_total_cost)} "
             f"credits={format_float(totals['credits'])} "
@@ -591,11 +750,12 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                 headers=[
                     "Hour",
                     "Total",
-                    "Input",
-                    "Output",
-                    "Cached",
-                    "Reasoning",
                     "Est.$",
+                    "Prompt",
+                    "Output",
+                    "Cached Prompt",
+                    "Reasoning",
+                    "Unsplit",
                     "Credits",
                     "Records",
                 ],
@@ -603,17 +763,18 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                     [
                         row["hour_label"],
                         format_int(row["total_tokens"]),
+                        format_float(row["estimated_cost_usd"]),
                         format_int(row["input_tokens"]),
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_hour
                 ],
-                right_align={1, 2, 3, 4, 5, 6, 7, 8},
+                right_align={1, 2, 3, 4, 5, 6, 7, 8, 9},
             )
         )
 
@@ -632,11 +793,12 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                     "Terminal",
                     "Method",
                     "Total",
-                    "Input",
-                    "Output",
-                    "Cached",
-                    "Reasoning",
                     "Est.$",
+                    "Prompt",
+                    "Output",
+                    "Cached Prompt",
+                    "Reasoning",
+                    "Unsplit",
                     "Credits",
                     "Records",
                 ],
@@ -645,17 +807,18 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                         row["terminal"],
                         row["method"],
                         format_int(row["total_tokens"]),
+                        format_float(row["estimated_cost_usd"]),
                         format_int(row["input_tokens"]),
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_terminal
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             )
         )
 
@@ -674,11 +837,12 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                     "Model",
                     "Method",
                     "Total",
-                    "Input",
-                    "Output",
-                    "Cached",
-                    "Reasoning",
                     "Est.$",
+                    "Prompt",
+                    "Output",
+                    "Cached Prompt",
+                    "Reasoning",
+                    "Unsplit",
                     "Credits",
                     "Records",
                 ],
@@ -687,65 +851,21 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
                         row["model_label"],
                         row["method"],
                         format_int(row["total_tokens"]),
+                        format_float(row["estimated_cost_usd"]),
                         format_int(row["input_tokens"]),
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_model
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             )
         )
 
-    lines.extend(
-        [
-            "",
-        "By source:",
-        ]
-    )
-    if not by_source:
-        lines.append("  (no records)")
-    else:
-        lines.append(
-            _render_table(
-                headers=[
-                    "App",
-                    "Source",
-                    "Model",
-                    "Method",
-                    "Total",
-                    "Input",
-                    "Output",
-                    "Cached",
-                    "Reasoning",
-                    "Est.$",
-                    "Credits",
-                    "Records",
-                ],
-                rows=[
-                    [
-                        row["app"],
-                        row["source"],
-                        row["model_label"],
-                        row["method"],
-                        format_int(row["total_tokens"]),
-                        format_int(row["input_tokens"]),
-                        format_int(row["output_tokens"]),
-                        format_int(row["cached_input_tokens"]),
-                        format_int(row["reasoning_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
-                        format_float(row["credits"]),
-                        str(row["records"]),
-                    ]
-                    for row in by_source
-                ],
-                right_align={4, 5, 6, 7, 8, 9, 10, 11},
-            )
-        )
     return "\n".join(lines)
 
 
@@ -760,18 +880,30 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
             source,
             measurement_method,
             COALESCE(model, '') AS model,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             COALESCE(json_extract(metadata_json, '$.model_provider'), '') AS model_provider,
             SUM(input_tokens) AS input_tokens,
             SUM(output_tokens) AS output_tokens,
             SUM(cached_input_tokens) AS cached_input_tokens,
             SUM(reasoning_tokens) AS reasoning_tokens,
+            SUM(
+                CASE
+                    WHEN COALESCE(total_tokens, 0) > 0
+                        AND COALESCE(input_tokens, 0) = 0
+                        AND COALESCE(output_tokens, 0) = 0
+                        AND COALESCE(cached_input_tokens, 0) = 0
+                        AND COALESCE(reasoning_tokens, 0) = 0
+                    THEN COALESCE(total_tokens, 0)
+                    ELSE 0
+                END
+            ) AS unsplit_tokens,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records
         FROM usage_records
         WHERE local_date >= date(?, ?)
-        GROUP BY local_date, app, source, measurement_method, model, model_provider
-        ORDER BY local_date DESC, total_tokens DESC, app, source, model, model_provider, measurement_method
+        GROUP BY local_date, app, source, measurement_method, model, originator, model_provider
+        ORDER BY local_date DESC, total_tokens DESC, app, source, model, originator, model_provider, measurement_method
         """,
         (end_date, f"-{max(last_days - 1, 0)} day"),
         ).fetchall()
@@ -785,7 +917,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
     by_terminal = _aggregate_usage_rows(
         detailed_rows,
         key_fields=["terminal"],
-        key_builder=lambda row: (_terminal_label(row["app"], row["source"]),),
+        key_builder=lambda row: (_terminal_label(row["app"], row["source"], row.get("originator")),),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["terminal"])),
     )
     by_model = _aggregate_usage_rows(
@@ -794,18 +926,20 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
         key_builder=lambda row: (row["model_label"],),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["model_label"])),
     )
-    rows = _aggregate_usage_rows(
-        detailed_rows,
-        key_fields=["local_date", "app", "source", "model_label"],
-        key_builder=lambda row: (row["local_date"], row["app"], row["source"], row["model_label"]),
-        sort_key=lambda row: (
-            -int(str(row["local_date"]).replace("-", "")),
-            -int(row["total_tokens"]),
-            str(row["app"]),
-            str(row["source"]),
-            str(row["model_label"]),
-        ),
-    )
+    rows = None
+    if json_mode:
+        rows = _aggregate_usage_rows(
+            detailed_rows,
+            key_fields=["local_date", "app", "source", "originator", "model_label"],
+            key_builder=lambda row: (row["local_date"], row["app"], row["source"], row.get("originator", ""), row["model_label"]),
+            sort_key=lambda row: (
+                -int(str(row["local_date"]).replace("-", "")),
+                -int(row["total_tokens"]),
+                str(row["app"]),
+                str(_source_label(row["app"], row["source"], row.get("originator"))),
+                str(row["model_label"]),
+            ),
+        )
     if json_mode:
         return json.dumps(
             {
@@ -813,7 +947,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                 "by_date": by_date_rows,
                 "by_terminal": by_terminal,
                 "by_model": by_model,
-                "by_source": rows,
+                "by_source": rows or [],
             },
             ensure_ascii=False,
             indent=2,
@@ -836,109 +970,82 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
             "",
             "By date:",
             _render_table(
-                headers=["Date", "Total", "Input", "Output", "Cached", "Reasoning", "Est.$", "Credits", "Records"],
+                headers=["Date", "Total", "Est.$", "Prompt", "Output", "Cached Prompt", "Reasoning", "Unsplit", "Credits", "Records"],
                 rows=[
                     [
                         row["local_date"],
                         format_int(row["total_tokens"]),
+                        format_float(row["estimated_cost_usd"]),
                         format_int(row["input_tokens"]),
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_date_rows
                 ],
-                right_align={1, 2, 3, 4, 5, 6, 7, 8},
+                right_align={1, 2, 3, 4, 5, 6, 7, 8, 9},
             ),
             "",
             "By terminal:",
             _render_table(
-                headers=["Terminal", "Method", "Total", "Input", "Output", "Cached", "Reasoning", "Est.$", "Credits", "Records"],
+                headers=["Terminal", "Method", "Total", "Est.$", "Prompt", "Output", "Cached Prompt", "Reasoning", "Unsplit", "Credits", "Records"],
                 rows=[
                     [
                         row["terminal"],
                         row["method"],
                         format_int(row["total_tokens"]),
+                        format_float(row["estimated_cost_usd"]),
                         format_int(row["input_tokens"]),
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_terminal
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             ),
             "",
             "By model:",
             _render_table(
-                headers=["Model", "Method", "Total", "Input", "Output", "Cached", "Reasoning", "Est.$", "Credits", "Records"],
+                headers=["Model", "Method", "Total", "Est.$", "Prompt", "Output", "Cached Prompt", "Reasoning", "Unsplit", "Credits", "Records"],
                 rows=[
                     [
                         row["model_label"],
                         row["method"],
                         format_int(row["total_tokens"]),
+                        format_float(row["estimated_cost_usd"]),
                         format_int(row["input_tokens"]),
                         format_int(row["output_tokens"]),
                         format_int(row["cached_input_tokens"]),
                         format_int(row["reasoning_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
+                        format_int(row["unsplit_tokens"]),
                         format_float(row["credits"]),
                         str(row["records"]),
                     ]
                     for row in by_model
                 ],
-                right_align={2, 3, 4, 5, 6, 7, 8, 9},
+                right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             ),
-            "",
-            "By source:",
         ]
     )
-
-    lines.append(
-        _render_table(
-            headers=[
-                "Date",
-                "App",
-                "Source",
-                "Model",
-                "Method",
-                "Total",
-                "Input",
-                "Output",
-                "Cached",
-                "Reasoning",
-                "Est.$",
-                "Credits",
-                "Records",
-            ],
-            rows=[
-                [
-                    row["local_date"],
-                    row["app"],
-                    row["source"],
-                    row["model_label"],
-                    row["method"],
-                    format_int(row["total_tokens"]),
-                    format_int(row["input_tokens"]),
-                    format_int(row["output_tokens"]),
-                    format_int(row["cached_input_tokens"]),
-                    format_int(row["reasoning_tokens"]),
-                    format_float(row["estimated_cost_usd"]),
-                    format_float(row["credits"]),
-                    str(row["records"]),
-                ]
-                for row in rows
-            ],
-            right_align={5, 6, 7, 8, 9, 10, 11, 12},
-        )
-    )
     return "\n".join(lines)
+
+
+def render_html_report(conn: sqlite3.Connection, last_days: int, tz) -> str:
+    payload = json.loads(render_range_report(conn, last_days, tz, json_mode=True))
+    generated_at = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+    timezone_name = getattr(tz, "key", None) or str(tz)
+    return render_range_html_report(
+        payload,
+        generated_at=generated_at,
+        timezone_name=timezone_name,
+    )
 
 
 def render_clients_report(
@@ -958,6 +1065,7 @@ def render_clients_report(
         SELECT
             app,
             source,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             measurement_method,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
@@ -965,8 +1073,8 @@ def render_clients_report(
             MAX(started_at) AS last_seen
         FROM usage_records
         WHERE {query_sql}
-        GROUP BY app, source, measurement_method
-        ORDER BY total_tokens DESC, credits DESC, app, source
+        GROUP BY app, source, originator, measurement_method
+        ORDER BY total_tokens DESC, credits DESC, app, source, originator
         """,
         query_params,
     ).fetchall()
@@ -1151,7 +1259,7 @@ def render_pricing_report(*, json_mode: bool) -> str:
             ),
             "",
             _render_table(
-                headers=["Model", "Input $/1M", "Cached $/1M", "Output $/1M", "Source"],
+                headers=["Model", "Prompt $/1M", "Cached Prompt $/1M", "Output $/1M", "Source"],
                 rows=[
                     [
                         row["model"],
@@ -1260,14 +1368,15 @@ def render_doctor_report(conn: sqlite3.Connection, db_path: Path, tz, *, json_mo
         SELECT
             app,
             source,
+            COALESCE(json_extract(metadata_json, '$.originator'), '') AS originator,
             measurement_method,
             COALESCE(SUM(total_tokens), 0) AS total_tokens,
             COALESCE(SUM(credits), 0.0) AS credits,
             COUNT(*) AS records,
             MAX(started_at) AS last_seen
         FROM usage_records
-        GROUP BY app, source, measurement_method
-        ORDER BY total_tokens DESC, credits DESC, app, source
+        GROUP BY app, source, originator, measurement_method
+        ORDER BY total_tokens DESC, credits DESC, app, source, originator
         """
     ).fetchall()
     by_client = _aggregate_client_rows(source_rows, installed_map)
@@ -1608,7 +1717,7 @@ def _aggregate_client_rows(source_rows: list[sqlite3.Row], installed_map: dict[s
     }
 
     for row in source_rows:
-        client_key = logical_client_for_usage_row(row["app"], row["source"])
+        client_key = logical_client_for_usage_row(row["app"], row["source"], row["originator"])
         if client_key is None or client_key not in totals:
             continue
         item = totals[client_key]
@@ -2271,6 +2380,7 @@ def _aggregate_usage_rows(
                 "output_tokens": 0,
                 "cached_input_tokens": 0,
                 "reasoning_tokens": 0,
+                "unsplit_tokens": 0,
                 "total_tokens": 0,
                 "credits": 0.0,
                 "records": 0,
@@ -2295,6 +2405,7 @@ def _aggregate_usage_rows(
         if row["reasoning_tokens"] is not None:
             bucket["reasoning_tokens"] = int(bucket["reasoning_tokens"]) + int(row["reasoning_tokens"])
             bucket["reasoning_present"] = True
+        bucket["unsplit_tokens"] = int(bucket["unsplit_tokens"]) + _row_unsplit_tokens(row)
         bucket["total_tokens"] = int(bucket["total_tokens"]) + int(row["total_tokens"])
         bucket["credits"] = float(bucket["credits"]) + float(row["credits"])
         bucket["records"] = int(bucket["records"]) + int(row["records"])
@@ -2333,9 +2444,41 @@ def _format_measurement_methods(methods: set[str]) -> str:
     return "+".join(sorted(methods, key=lambda method: (method_order.get(method, 99), method)))
 
 
-def _terminal_label(app: str | None, source: str | None) -> str:
+def _unsplit_tokens_for_row(row: sqlite3.Row | dict[str, object]) -> int:
+    total_tokens = int(row["total_tokens"] or 0)
+    input_tokens = int(row["input_tokens"] or 0)
+    output_tokens = int(row["output_tokens"] or 0)
+    cached_input_tokens = int(row["cached_input_tokens"] or 0)
+    reasoning_tokens = int(row["reasoning_tokens"] or 0)
+    if (
+        total_tokens > 0
+        and input_tokens == 0
+        and output_tokens == 0
+        and cached_input_tokens == 0
+        and reasoning_tokens == 0
+    ):
+        return total_tokens
+    return 0
+
+
+def _row_unsplit_tokens(row: sqlite3.Row | dict[str, object]) -> int:
+    explicit_value = None
+    if isinstance(row, dict):
+        explicit_value = row.get("unsplit_tokens")
+    elif "unsplit_tokens" in row.keys():
+        explicit_value = row["unsplit_tokens"]
+    if explicit_value is not None:
+        return int(explicit_value)
+    return _unsplit_tokens_for_row(row)
+
+
+def _terminal_label(app: str | None, source: str | None, originator: str | None = None) -> str:
     source_value = (source or "").strip().lower()
     app_value = (app or "").strip()
+    if app_value.lower() == "codex" and source_value == "codex:vscode":
+        if is_codex_desktop_originator(originator):
+            return "Codex Desktop"
+        return "VS Code"
     if "vscode" in source_value:
         return "VS Code"
     if source_value.endswith(":cli") or source_value == "cli":
@@ -2355,6 +2498,10 @@ def _terminal_label(app: str | None, source: str | None) -> str:
     return "unknown"
 
 
+def _source_label(app: str | None, source: str | None, originator: str | None = None) -> str:
+    return _terminal_label(app, source, originator)
+
+
 def _model_label(model: str | None, provider: str | None) -> str:
     return normalize_model_display(model, provider)
 
@@ -2365,6 +2512,7 @@ def _enrich_usage_rows(rows: Iterable[sqlite3.Row]) -> list[dict[str, object]]:
     for row in rows:
         item = dict(row)
         item["model_label"] = _model_label(item.get("model"), item.get("model_provider"))
+        item["unsplit_tokens"] = _row_unsplit_tokens(item)
         item["estimated_cost_usd"] = estimate_cost_usd(
             model=item.get("model"),
             provider=item.get("model_provider"),
@@ -2390,6 +2538,13 @@ def _sum_estimated_cost(rows: Iterable[dict[str, object]]) -> float | None:
     if not present:
         return None
     return round(total, 8)
+
+
+def _sum_unsplit_tokens(rows: Iterable[dict[str, object]]) -> int:
+    total = 0
+    for row in rows:
+        total += int(row.get("unsplit_tokens") or 0)
+    return total
 
 
 def _render_table(
@@ -2465,6 +2620,19 @@ def _emit_rendered(rendered: str, output_path: Path | None) -> None:
         print(f"wrote report to {output_path}")
         return
     print(rendered)
+
+
+def _default_html_report_path(last_days: int, tz) -> Path:
+    report_date = today_string(tz)
+    return default_report_dir() / f"tokkit-last-{last_days}-{report_date}.html"
+
+
+def _emit_html_report(rendered: str, output_path: Path, *, open_browser: bool) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(rendered + "\n", encoding="utf-8")
+    print(f"wrote HTML report to {output_path}")
+    if open_browser:
+        subprocess.run(["open", str(output_path)], check=False)
 
 
 if __name__ == "__main__":

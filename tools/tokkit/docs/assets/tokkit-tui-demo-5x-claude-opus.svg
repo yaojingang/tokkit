@@ -1,0 +1,113 @@
+<svg width="2048" height="1280" viewBox="0 0 2048 1280" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="2048" height="1280" rx="28" fill="#0B1020"/>
+  <rect x="18" y="18" width="2012" height="1244" rx="22" fill="#12151D" stroke="#2A3140" stroke-width="2"/>
+  <rect x="18" y="18" width="2012" height="64" rx="22" fill="#0F172A"/>
+  <circle cx="48" cy="50" r="8" fill="#F87171"/>
+  <circle cx="76" cy="50" r="8" fill="#FBBF24"/>
+  <circle cx="104" cy="50" r="8" fill="#34D399"/>
+  <text x="1024" y="56" text-anchor="middle" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="22">TokKit TUI demo screenshot · synthetic 5x Claude Opus mix</text>
+  <text x="42" y="124" fill="#60A5FA" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="22">~</text>
+  <text x="70" y="124" fill="#34D399" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="22">tok tui --demo</text>
+  <text x="42" y="176" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="48" font-weight="850">TokKit Demo Dashboard</text>
+  <text x="42" y="215" fill="#93A4B8" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20">Synthetic 30-day usage · totals scaled 5x · Claude Code Opus 4.6 / 4.7 boosted</text>
+  <rect x="1488" y="142" width="110" height="38" rx="19" fill="#1D4ED8"/><text x="1505" y="167" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">30 days</text>
+  <rect x="1618" y="142" width="124" height="38" rx="19" fill="#B45309"/><text x="1635" y="167" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">demo data</text>
+  <rect x="1772" y="142" width="144" height="38" rx="19" fill="#047857"/><text x="1789" y="167" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">local-first</text>
+  <rect x="42" y="258" width="475" height="152" rx="24" fill="#F8FAFC"/>
+  <text x="68" y="301" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="750">Total tokens</text>
+  <text x="68" y="354" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="40" font-weight="850">23.75B</text>
+  <text x="68" y="386" fill="#64748B" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="17">5x synthetic report</text>
+  <rect x="539" y="258" width="475" height="152" rx="24" fill="#F8FAFC"/>
+  <text x="565" y="301" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="750">Estimated cost</text>
+  <text x="565" y="354" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="40" font-weight="850">$23,668.08</text>
+  <text x="565" y="386" fill="#64748B" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="17">API-priced records</text>
+  <rect x="1036" y="258" width="475" height="152" rx="24" fill="#F8FAFC"/>
+  <text x="1062" y="301" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="750">Prompt tokens</text>
+  <text x="1062" y="354" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="40" font-weight="850">21.95B</text>
+  <text x="1062" y="386" fill="#64748B" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="17">includes cached prompt</text>
+  <rect x="1533" y="258" width="475" height="152" rx="24" fill="#F8FAFC"/>
+  <text x="1559" y="301" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="750">Records</text>
+  <text x="1559" y="354" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="40" font-weight="850">275,715</text>
+  <text x="1559" y="386" fill="#64748B" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="17">normalized usage rows</text>
+  <rect x="42" y="452" width="944" height="366" rx="24" fill="#171C26" stroke="#2A3140" stroke-width="2"/><text x="70" y="494" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="800">Model mix</text>
+  <text x="74" y="531" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">GPT-5.4</text>
+  <rect x="330" y="508" width="540" height="20" rx="10" fill="#2A3140"/>
+  <rect x="330" y="508" width="520" height="20" rx="10" fill="#60A5FA"/>
+  <text x="902" y="531" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">8.61B · 36.3%</text>
+  <text x="74" y="574" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">GPT-5.5</text>
+  <rect x="330" y="551" width="540" height="20" rx="10" fill="#2A3140"/>
+  <rect x="330" y="551" width="375" height="20" rx="10" fill="#F97316"/>
+  <text x="902" y="574" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">6.22B · 26.2%</text>
+  <text x="74" y="617" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Claude Opus 4.6</text>
+  <rect x="330" y="594" width="540" height="20" rx="10" fill="#2A3140"/>
+  <rect x="330" y="594" width="286" height="20" rx="10" fill="#34D399"/>
+  <text x="902" y="617" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">4.75B · 20.0%</text>
+  <text x="74" y="660" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Claude Opus 4.7</text>
+  <rect x="330" y="637" width="540" height="20" rx="10" fill="#2A3140"/>
+  <rect x="330" y="637" width="229" height="20" rx="10" fill="#F59E0B"/>
+  <text x="902" y="660" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">3.80B · 16.0%</text>
+  <text x="74" y="703" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Claude Sonnet 4.6</text>
+  <rect x="330" y="680" width="540" height="20" rx="10" fill="#2A3140"/>
+  <rect x="330" y="680" width="20" height="20" rx="10" fill="#F472B6"/>
+  <text x="902" y="703" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">343.0M · 1.4%</text>
+  <text x="74" y="746" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Claude Haiku 4.5</text>
+  <rect x="330" y="723" width="540" height="20" rx="10" fill="#2A3140"/>
+  <rect x="330" y="723" width="1" height="20" rx="10" fill="#A78BFA"/>
+  <text x="902" y="746" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">26.0M · 0.1%</text>
+  <rect x="1018" y="452" width="988" height="366" rx="24" fill="#171C26" stroke="#2A3140" stroke-width="2"/><text x="1046" y="494" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="800">Terminal share</text>
+  <text x="1050" y="531" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Codex Desktop</text>
+  <rect x="1280" y="508" width="568" height="20" rx="10" fill="#2A3140"/>
+  <rect x="1280" y="508" width="548" height="20" rx="10" fill="#34D399"/>
+  <text x="1968" y="531" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">14.45B</text>
+  <text x="1050" y="574" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">claude-code</text>
+  <rect x="1280" y="551" width="568" height="20" rx="10" fill="#2A3140"/>
+  <rect x="1280" y="551" width="338" height="20" rx="10" fill="#F59E0B"/>
+  <text x="1968" y="574" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">8.92B</text>
+  <text x="1050" y="617" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">CLI</text>
+  <rect x="1280" y="594" width="568" height="20" rx="10" fill="#2A3140"/>
+  <rect x="1280" y="594" width="14" height="20" rx="10" fill="#F472B6"/>
+  <text x="1968" y="617" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">381.6M</text>
+  <text x="1050" y="660" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Warp</text>
+  <rect x="1280" y="637" width="568" height="20" rx="10" fill="#2A3140"/>
+  <rect x="1280" y="637" width="0" height="20" rx="10" fill="#A78BFA"/>
+  <text x="1968" y="660" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">614.6K</text>
+  <text x="1050" y="703" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">codex_exec</text>
+  <rect x="1280" y="680" width="568" height="20" rx="10" fill="#2A3140"/>
+  <rect x="1280" y="680" width="0" height="20" rx="10" fill="#60A5FA"/>
+  <text x="1968" y="703" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">345.2K</text>
+  <text x="1050" y="746" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">VS Code</text>
+  <rect x="1280" y="723" width="568" height="20" rx="10" fill="#2A3140"/>
+  <rect x="1280" y="723" width="0" height="20" rx="10" fill="#F97316"/>
+  <text x="1968" y="746" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">327.6K</text>
+  <rect x="42" y="850" width="1264" height="360" rx="24" fill="#171C26" stroke="#2A3140" stroke-width="2"/><text x="70" y="892" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="800">14-day activity</text>
+  <line x1="92" y1="925.0" x2="1234" y2="925.0" stroke="#2A3140" stroke-width="2"/>
+  <line x1="92" y1="998.3" x2="1234" y2="998.3" stroke="#2A3140" stroke-width="2"/>
+  <line x1="92" y1="1071.7" x2="1234" y2="1071.7" stroke="#2A3140" stroke-width="2"/>
+  <line x1="92" y1="1145.0" x2="1234" y2="1145.0" stroke="#2A3140" stroke-width="2"/>
+  <path d="M 92,1145 L 92.0,1097.5 179.8,1096.4 267.7,1111.3 355.5,1010.6 443.4,1101.5 531.2,988.4 619.1,925.0 706.9,1102.6 794.8,1065.1 882.6,1078.9 970.5,1071.7 1058.3,1050.9 1146.2,1034.2 1234.0,1032.5 L 1234,1145 Z" fill="#1D4ED8" opacity="0.20"/>
+  <polyline points="92.0,1097.5 179.8,1096.4 267.7,1111.3 355.5,1010.6 443.4,1101.5 531.2,988.4 619.1,925.0 706.9,1102.6 794.8,1065.1 882.6,1078.9 970.5,1071.7 1058.3,1050.9 1146.2,1034.2 1234.0,1032.5" fill="none" stroke="#60A5FA" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="92.0" cy="1097.5" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="179.8" cy="1096.4" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="267.7" cy="1111.3" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="355.5" cy="1010.6" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="443.4" cy="1101.5" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="531.2" cy="988.4" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="619.1" cy="925.0" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="706.9" cy="1102.6" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="794.8" cy="1065.1" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="882.6" cy="1078.9" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="970.5" cy="1071.7" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="1058.3" cy="1050.9" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="1146.2" cy="1034.2" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <circle cx="1234.0" cy="1032.5" r="6" fill="#F8FAFC" stroke="#60A5FA" stroke-width="4"/>
+  <text x="92" y="1187" fill="#93A4B8" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="16">2026-04-20 → 2026-05-03 · peak 2.25B</text>
+  <rect x="1338" y="850" width="668" height="360" rx="24" fill="#171C26" stroke="#2A3140" stroke-width="2"/><text x="1366" y="892" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="800">Claude Code focus</text>
+  <text x="1370" y="930" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="750">Opus 4.6 + 4.7</text>
+  <text x="1370" y="1008" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="62" font-weight="900">8.55B</text>
+  <text x="1370" y="1046" fill="#93A4B8" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20">36.0% of all demo tokens</text>
+  <rect x="1370" y="1088" width="548" height="28" rx="14" fill="#2A3140"/>
+  <rect x="1370" y="1088" width="304.5" height="28" rx="14" fill="#34D399"/>
+  <rect x="1674.5" y="1088" width="243.5" height="28" rx="14" fill="#F59E0B"/>
+  <text x="1370" y="1154" fill="#34D399" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18">Opus 4.6 4.75B</text>
+  <text x="1918" y="1154" text-anchor="end" fill="#F59E0B" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18">Opus 4.7 3.80B</text>
+</svg>

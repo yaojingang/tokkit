@@ -4,11 +4,16 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .db import UsageRecord, upsert_usage_record
+from .db import (
+    UsageRecord,
+    get_file_scan_state,
+    upsert_file_scan_state,
+    upsert_usage_record,
+)
 from .utils import estimate_text_tokens, local_date_for
 
 
@@ -43,7 +48,7 @@ def scan_augment_history(
 
     selection_by_request = _load_selection_metadata(workspace_storage_root, stats)
     request_timestamp_index = _load_request_timestamp_index(workspace_storage_root, tz)
-    checkpoint_totals = _load_checkpoint_totals(workspace_storage_root, stats, tz)
+    checkpoint_totals = _load_checkpoint_totals(conn, workspace_storage_root, stats, tz)
 
     request_ids = set(checkpoint_totals.keys()) | set(selection_by_request.keys())
     for request_id in sorted(request_ids):
@@ -181,31 +186,106 @@ def _load_request_timestamp_index(
 
 
 def _load_checkpoint_totals(
+    conn: sqlite3.Connection,
     workspace_storage_root: Path,
     stats: AugmentHistoryScanStats,
     tz: ZoneInfo,
 ) -> dict[str, dict[str, object]]:
-    aggregated: dict[str, dict[str, object]] = {}
     pattern = "*/Augment.vscode-augment/augment-user-assets/checkpoint-documents/*/*.json"
     for path in sorted(workspace_storage_root.glob(pattern)):
-        match = _CHECKPOINT_NAME_RE.match(path.name)
-        if match is None:
+        _sync_checkpoint_state(conn, path, stats, tz)
+
+    return _checkpoint_totals_from_state(conn, workspace_storage_root)
+
+
+def _sync_checkpoint_state(
+    conn: sqlite3.Connection,
+    path: Path,
+    stats: AugmentHistoryScanStats,
+    tz: ZoneInfo,
+) -> None:
+    match = _CHECKPOINT_NAME_RE.match(path.name)
+    if match is None:
+        return
+    try:
+        stat = path.stat()
+    except OSError:
+        return
+
+    state_key = _checkpoint_state_key(path)
+    previous = get_file_scan_state(conn, state_key)
+    if previous is not None:
+        previous_size = int(previous["file_size"] or 0)
+        previous_mtime_ns = int(previous["mtime_ns"] or 0)
+        if previous_size == int(stat.st_size) and previous_mtime_ns == int(stat.st_mtime_ns):
+            return
+
+    stats.checkpoint_files_seen += 1
+    timestamp_ms = int(match.group(1))
+    request_id = match.group(2)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    output_tokens = _estimate_checkpoint_output_tokens(payload)
+    if output_tokens <= 0:
+        output_tokens = 0
+
+    doc_path = payload.get("path")
+    workspace = _workspace_from_doc_path(doc_path)
+    sample_document = _path_from_doc_path(doc_path)
+    started_at = datetime.fromtimestamp(timestamp_ms / 1000, tz=tz).isoformat()
+
+    upsert_file_scan_state(
+        conn,
+        state_key=state_key,
+        app="augment-history-checkpoint",
+        file_path=str(path),
+        offset=0,
+        file_size=int(stat.st_size),
+        mtime_ns=int(stat.st_mtime_ns),
+        last_scanned_at=datetime.now(timezone.utc).isoformat(),
+        metadata={
+            "request_id": request_id,
+            "started_at": started_at,
+            "output_tokens": output_tokens,
+            "workspace": workspace,
+            "sample_document": sample_document,
+        },
+    )
+
+
+def _checkpoint_totals_from_state(
+    conn: sqlite3.Connection,
+    workspace_storage_root: Path,
+) -> dict[str, dict[str, object]]:
+    aggregated: dict[str, dict[str, object]] = {}
+    root_prefix = str(workspace_storage_root)
+    rows = conn.execute(
+        """
+        SELECT file_path, metadata_json
+        FROM file_scan_state
+        WHERE app = 'augment-history-checkpoint'
+        """
+    ).fetchall()
+    for row in rows:
+        file_path = str(row["file_path"] or "")
+        if root_prefix and not file_path.startswith(root_prefix):
             continue
-        stats.checkpoint_files_seen += 1
-        timestamp_ms = int(match.group(1))
-        request_id = match.group(2)
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            metadata = json.loads(row["metadata_json"] or "{}")
         except Exception:
             continue
-        output_tokens = _estimate_checkpoint_output_tokens(payload)
-        if output_tokens <= 0:
-            output_tokens = 0
-
-        doc_path = payload.get("path")
-        workspace = _workspace_from_doc_path(doc_path)
-        sample_document = _path_from_doc_path(doc_path)
-        started_at = datetime.fromtimestamp(timestamp_ms / 1000, tz=tz).isoformat()
+        if not isinstance(metadata, dict):
+            continue
+        request_id = str(metadata.get("request_id") or "").strip()
+        started_at = str(metadata.get("started_at") or "").strip()
+        if not request_id or not started_at:
+            continue
+        output_tokens = int(metadata.get("output_tokens") or 0)
+        workspace = metadata.get("workspace")
+        sample_document = metadata.get("sample_document")
 
         bucket = aggregated.setdefault(
             request_id,
@@ -228,6 +308,10 @@ def _load_checkpoint_totals(
             if isinstance(sample_documents, list) and sample_document not in sample_documents and len(sample_documents) < 3:
                 sample_documents.append(sample_document)
     return aggregated
+
+
+def _checkpoint_state_key(path: Path) -> str:
+    return f"augment-history-checkpoint:file:{path.resolve()}"
 
 
 def _estimate_selection_tokens(selection: dict[str, object]) -> int:

@@ -39,16 +39,22 @@ _CLAUDE_API_RE = re.compile(
     r"^claude[- ]?(sonnet|opus|haiku)[- ]?(\d+(?:[-.]\d+)?)(?:[- ]\d{8})?(.*)$",
     re.IGNORECASE,
 )
-_GPT_RE = re.compile(r"^gpt[- ]?([0-9.]+)(?:[- ]?(mini|nano|codex))?(.*)$", re.IGNORECASE)
+_GPT_RE = re.compile(r"^gpt[- ]?([0-9.]+)(?:[- ]?(mini|nano|codex|pro))?(.*)$", re.IGNORECASE)
 DEFAULT_PRICING_PATH = resolve_app_home() / "pricing.json"
 
 
 BUILTIN_PRICE_BOOK: dict[str, ModelPrice] = {
+    "GPT-5.5": ModelPrice(5.00, 0.50, 30.00),
+    "GPT-5.5 Pro": ModelPrice(30.00, None, 180.00),
     "GPT-5.4": ModelPrice(2.50, 0.25, 15.00),
+    "GPT-5.4 Pro": ModelPrice(30.00, None, 180.00),
     "GPT-5.4 Mini": ModelPrice(0.75, 0.075, 4.50),
     "GPT-5.4 Nano": ModelPrice(0.20, 0.02, 1.25),
+    "GPT-5.3 Codex": ModelPrice(1.75, 0.175, 14.00),
+    "GPT-5.2 Pro": ModelPrice(21.00, None, 168.00),
     "GPT-5.2": ModelPrice(1.75, 0.175, 14.00),
     "GPT-5.2 Codex": ModelPrice(1.75, 0.175, 14.00),
+    "GPT-5 Pro": ModelPrice(15.00, None, 120.00),
     "GPT-5": ModelPrice(1.25, 0.125, 10.00),
     "GPT-5 Codex": ModelPrice(1.25, 0.125, 10.00),
     "GPT-5 Mini": ModelPrice(0.25, 0.025, 2.00),

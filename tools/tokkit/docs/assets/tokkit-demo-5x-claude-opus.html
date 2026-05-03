@@ -1,0 +1,1275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TokKit 用量报告（示例数据）- 最近 30 天</title>
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f5f4ed;
+  --ivory: #faf9f5;
+  --warm-sand: #e8e6dc;
+  --border: #ded9cc;
+  --ink: #141413;
+  --charcoal: #3d3d3a;
+  --olive: #626058;
+  --stone: #8d8a80;
+  --brand: #1b365d;
+  --brand-soft: #e4ecf5;
+  --green: #2f6f55;
+  --rust: #b56b35;
+  --gold: #a38635;
+  --rose: #9b5864;
+  --ring: #cfc9b8;
+  --module-gap: 16px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(135deg, rgba(27, 54, 93, 0.08), transparent 34rem),
+    linear-gradient(225deg, rgba(181, 107, 53, 0.08), transparent 32rem),
+    var(--paper);
+  color: var(--ink);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(245, 244, 237, 0.92);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(18px);
+}
+.topbar-inner {
+  width: min(1220px, calc(100% - 28px));
+  min-height: 64px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+.brand {
+  color: var(--brand);
+  font-family: "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  font-size: 22px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.nav-links {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+.nav-links a,
+.range-button,
+.ghost-button,
+.scan-button,
+.lang-button {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  white-space: nowrap;
+}
+.nav-links a {
+  color: var(--charcoal);
+  padding: 7px 10px;
+  text-decoration: none;
+}
+.nav-links a:hover {
+  background: var(--warm-sand);
+  color: var(--brand);
+}
+.top-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.range-group {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--warm-sand);
+  border-radius: 10px;
+}
+.range-button,
+.ghost-button {
+  background: transparent;
+  color: var(--charcoal);
+  padding: 7px 11px;
+  cursor: pointer;
+}
+.range-button.active,
+.ghost-button:hover {
+  background: var(--ivory);
+  border-color: var(--ring);
+  color: var(--brand);
+}
+.scan-button {
+  background: var(--brand);
+  color: var(--ivory);
+  padding: 7px 13px;
+  cursor: pointer;
+}
+.lang-button {
+  min-width: 44px;
+  background: var(--ivory);
+  border-color: var(--ring);
+  color: var(--brand);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.lang-button:hover {
+  background: var(--brand-soft);
+}
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  max-width: min(480px, calc(100% - 36px));
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--ivory);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.chart-tooltip {
+  position: fixed;
+  z-index: 40;
+  max-width: min(320px, calc(100% - 28px));
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--ivory);
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(20, 20, 19, 0.18);
+  opacity: 0;
+  transform: translate(-50%, calc(-100% - 12px));
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.chart-tooltip.visible {
+  opacity: 1;
+}
+[data-tooltip] {
+  cursor: crosshair;
+}
+[data-tooltip]:hover {
+  filter: brightness(1.08);
+}
+.report-shell {
+  width: min(1220px, calc(100% - 28px));
+  margin: 0 auto;
+  padding: 30px 0 60px;
+}
+.anchor-section { scroll-margin-top: 82px; }
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  align-items: end;
+  margin: 18px 0 18px;
+}
+.eyebrow {
+  margin: 0 0 9px;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 700;
+}
+h1 {
+  max-width: 900px;
+  margin: 0;
+  font-family: "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  font-size: clamp(34px, 5vw, 68px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+.subtle,
+.hint,
+.empty {
+  color: var(--olive);
+}
+.subtle {
+  margin: 15px 0 0;
+}
+.hero-note {
+  background: var(--ink);
+  color: var(--ivory);
+  border-radius: 8px;
+  padding: 18px;
+}
+.hero-note span,
+.hero-note small {
+  display: block;
+  color: #d7d2c6;
+}
+.hero-note strong {
+  display: block;
+  margin: 8px 0 5px;
+  font-family: "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  font-size: 25px;
+  font-weight: 500;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.metric,
+.panel {
+  background: rgba(250, 249, 245, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 0 rgba(20, 20, 19, 0.04);
+}
+.metric {
+  min-width: 0;
+  padding: 15px;
+}
+.metric span,
+.control-label {
+  display: block;
+  color: var(--olive);
+  font-size: 12px;
+  font-weight: 700;
+}
+.metric strong {
+  display: block;
+  margin: 7px 0 4px;
+  color: var(--brand);
+  font-family: "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  font-size: clamp(22px, 2.4vw, 31px);
+  font-weight: 500;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.metric small {
+  color: var(--stone);
+}
+.panel {
+  min-width: 0;
+  padding: 18px;
+}
+.panel h2 {
+  margin: 0 0 14px;
+  padding-left: 10px;
+  border-left: 4px solid var(--brand);
+  font-family: "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.control-panel {
+  margin-bottom: 0;
+}
+.filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--module-gap);
+  align-items: end;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--ivory);
+  color: var(--charcoal);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--brand-soft);
+  border-color: #d6e1ee;
+  color: var(--brand);
+}
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+.chart-grid,
+.wide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--module-gap);
+  align-items: stretch;
+  margin-top: var(--module-gap);
+}
+.chart-grid > .panel,
+.wide-grid > .panel {
+  height: 100%;
+}
+.wide-panel {
+  margin-top: var(--module-gap);
+}
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.grid {
+  stroke: #e5e1d6;
+  stroke-width: 1;
+}
+.axis-label,
+.axis-value {
+  fill: var(--olive);
+  font-size: 12px;
+}
+.line {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.area {
+  fill: #e4ecf5;
+}
+.bars rect {
+  fill: var(--rust);
+}
+.multi-line {
+  fill: none;
+  stroke-width: 3.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 6px;
+  color: var(--olive);
+  font-size: 13px;
+}
+.legend span,
+.share-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.legend i,
+.share-list i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.donut-wrap {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+.donut {
+  position: relative;
+  width: 180px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.donut::after {
+  content: "";
+  position: absolute;
+  inset: 32px;
+  background: var(--ivory);
+  border-radius: 50%;
+}
+.donut span {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--brand);
+  font-family: "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  font-size: 18px;
+  font-weight: 500;
+  padding: 48px;
+}
+.share-list,
+.rank-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.share-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.rank-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(120px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+}
+.rank-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-row div {
+  height: 12px;
+  background: var(--warm-sand);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rank-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.rank-row strong,
+.share-list strong,
+td,
+th {
+  font-variant-numeric: tabular-nums;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th,
+td {
+  padding: 10px 9px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+th {
+  color: var(--olive);
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 980px) {
+  .topbar-inner,
+  .hero,
+  .chart-grid,
+  .wide-grid,
+  .filter-row {
+    grid-template-columns: 1fr;
+  }
+  .top-actions {
+    flex-wrap: wrap;
+  }
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .report-shell,
+  .topbar-inner {
+    width: min(100% - 20px, 1220px);
+  }
+  .metrics,
+  .donut-wrap,
+  .rank-row {
+    grid-template-columns: 1fr;
+  }
+  .donut {
+    width: min(180px, 100%);
+  }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#overview" aria-label="TokKit 报告首页">TokKit</a>
+    <nav class="nav-links" aria-label="报告模块">
+      <a href="#overview" data-i18n="nav.overview">总览</a>
+      <a href="#filters" data-i18n="nav.filters">筛选</a>
+      <a href="#trend" data-i18n="nav.trend">趋势</a>
+      <a href="#models" data-i18n="nav.models">模型</a>
+      <a href="#terminals" data-i18n="nav.terminals">终端</a>
+      <a href="#details" data-i18n="nav.details">明细</a>
+    </nav>
+    <div class="top-actions">
+      <div class="range-group" aria-label="时间范围"><button type="button" class="range-button" data-range="7">7 天</button><button type="button" class="range-button" data-range="14">14 天</button><button type="button" class="range-button active" data-range="30">30 天</button></div>
+      <button type="button" class="scan-button" id="rescanButton" data-i18n="actions.rescan">重新扫描</button>
+      <button type="button" class="lang-button" id="languageToggle" aria-label="Switch to English">EN</button>
+    </div>
+  </div>
+</header>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="chart-tooltip" id="chartTooltip" role="status" aria-live="polite"></div>
+<main class="report-shell">
+
+<section class="hero">
+  <div>
+    <p class="eyebrow" data-i18n="hero.eyebrow">本地 AI Token 账本</p>
+    <h1 data-i18n="hero.title" data-days="30">TokKit 用量报告（示例数据）- 最近 30 天</h1>
+    <p class="subtle" data-i18n="hero.meta" data-generated="2026-05-03 20:08:33 · DEMO: source report 5x, Claude Code Opus mix boosted" data-timezone="Asia/Shanghai">生成时间 2026-05-03 20:08:33 · DEMO: source report 5x, Claude Code Opus mix boosted · 时区 Asia/Shanghai</p>
+  </div>
+  <div class="hero-note">
+    <span data-i18n="hero.noteLabel">交互视图</span>
+    <strong data-i18n="hero.noteTitle">趋势 · 模型 · 终端</strong>
+    <small data-i18n="hero.noteBody">切换天数和模型筛选后，所有图表会同步重算。</small>
+  </div>
+</section>
+<section id="overview" class="anchor-section">
+<div id="summaryCards" class="metrics"></div>
+</section>
+<section id="filters" class="anchor-section panel control-panel">
+<h2 data-i18n="filters.title">筛选</h2>
+<div class="filter-row">
+<div><span class="control-label" data-i18n="filters.modelRange">模型范围</span><div id="modelChips" class="chips"></div></div>
+<div class="filter-actions">
+<button type="button" class="ghost-button" id="selectCoreModels" data-i18n="filters.core">只看核心模型</button>
+<button type="button" class="ghost-button" id="selectAllModels" data-i18n="filters.all">全部模型</button>
+</div>
+</div>
+<p class="hint" id="filterHint"></p>
+</section>
+<section id="trend" class="anchor-section chart-grid">
+
+<section class="panel">
+  <h2 data-i18n="panel.totalTrend">每日 Token 趋势</h2>
+  <div id="totalTrend"></div>
+</section>
+
+<section class="panel">
+  <h2 data-i18n="panel.costTrend">预估费用趋势</h2>
+  <div id="costTrend"></div>
+</section>
+
+<section class="panel">
+  <h2 data-i18n="panel.promptTrend">Prompt / Output / 缓存趋势</h2>
+  <div id="promptTrend"></div>
+</section>
+
+<section class="panel">
+  <h2 data-i18n="panel.cacheTrend">缓存命中率趋势</h2>
+  <div id="cacheTrend"></div>
+</section>
+</section>
+<section id="models" class="anchor-section wide-grid">
+
+<section class="panel">
+  <h2 data-i18n="panel.modelRank">模型消耗排行</h2>
+  <div id="modelRank"></div>
+</section>
+
+<section class="panel">
+  <h2 data-i18n="panel.modelTrend">核心模型每日消耗</h2>
+  <div id="modelTrend"></div>
+</section>
+</section>
+<section id="terminals" class="anchor-section chart-grid">
+
+<section class="panel">
+  <h2 data-i18n="panel.terminalShare">终端占比</h2>
+  <div id="terminalShare"></div>
+</section>
+
+<section class="panel">
+  <h2 data-i18n="panel.appRank">应用维度</h2>
+  <div id="appRank"></div>
+</section>
+
+<section class="panel">
+  <h2 data-i18n="panel.recordTrend">记录数趋势</h2>
+  <div id="recordTrend"></div>
+</section>
+
+<section class="panel">
+  <h2 data-i18n="panel.unsplitTrend">Unsplit 趋势</h2>
+  <div id="unsplitTrend"></div>
+</section>
+</section>
+<section id="details" class="anchor-section wide-panel panel">
+<h2 data-i18n="panel.details">每日明细</h2>
+<div id="dailyTable"></div>
+</section>
+</main>
+<script type="application/json" id="tokkit-data">{"range_days": 30, "by_date": [{"local_date": "2026-05-03", "input_tokens": 1079441243, "output_tokens": 3991138, "cached_input_tokens": 776791892, "reasoning_tokens": 773694, "unsplit_tokens": 790812, "total_tokens": 1149951738, "estimated_cost_usd": 1209.527204, "credits": 0.0, "records": 13355, "method": "demo"}, {"local_date": "2026-05-02", "input_tokens": 1063052582, "output_tokens": 4130060, "cached_input_tokens": 772328944, "reasoning_tokens": 935703, "unsplit_tokens": 905798, "total_tokens": 1132494858, "estimated_cost_usd": 1182.802542, "credits": 18.970139, "records": 14045, "method": "demo"}, {"local_date": "2026-05-01", "input_tokens": 891165591, "output_tokens": 3859706, "cached_input_tokens": 611348566, "reasoning_tokens": 669619, "unsplit_tokens": 3808368, "total_tokens": 961917956, "estimated_cost_usd": 1055.711912, "credits": 0.0, "records": 13369, "method": "demo"}, {"local_date": "2026-04-30", "input_tokens": 684365950, "output_tokens": 2735817, "cached_input_tokens": 403475857, "reasoning_tokens": 399944, "unsplit_tokens": 490562, "total_tokens": 749354497, "estimated_cost_usd": 940.867879, "credits": 0.0, "records": 10301, "method": "demo"}, {"local_date": "2026-04-29", "input_tokens": 607379882, "output_tokens": 2344442, "cached_input_tokens": 332650338, "reasoning_tokens": 285125, "unsplit_tokens": 5214098, "total_tokens": 675378463, "estimated_cost_usd": 879.763458, "credits": 0.0, "records": 9322, "method": "demo"}, {"local_date": "2026-04-28", "input_tokens": 751085491, "output_tokens": 3202464, "cached_input_tokens": 476787663, "reasoning_tokens": 534067, "unsplit_tokens": 3463878, "total_tokens": 816869749, "estimated_cost_usd": 987.740969, "credits": 0.0, "records": 10688, "method": "demo"}, {"local_date": "2026-04-27", "input_tokens": 374024695, "output_tokens": 1587441, "cached_input_tokens": 133729807, "reasoning_tokens": 117730, "unsplit_tokens": 203655, "total_tokens": 433611581, "estimated_cost_usd": 609.85051, "credits": 0.0, "records": 7659, "method": "demo"}, {"local_date": "2026-04-26", "input_tokens": 2165253158, "output_tokens": 5528729, "cached_input_tokens": 1725875506, "reasoning_tokens": 997161, "unsplit_tokens": 21958436, "total_tokens": 2249213987, "estimated_cost_usd": 2502.262828, "credits": 0.0, "records": 17339, "method": "demo"}, {"local_date": "2026-04-25", "input_tokens": 1532057749, "output_tokens": 5734269, "cached_input_tokens": 1191713218, "reasoning_tokens": 1455669, "unsplit_tokens": 8175930, "total_tokens": 1601119487, "estimated_cost_usd": 1695.346881, "credits": 0.0, "records": 14889, "method": "demo"}, {"local_date": "2026-04-24", "input_tokens": 389032677, "output_tokens": 1448240, "cached_input_tokens": 163737369, "reasoning_tokens": 123760, "unsplit_tokens": 414972, "total_tokens": 444725300, "estimated_cost_usd": 591.717524, "credits": 0.0, "records": 7541, "method": "demo"}, {"local_date": "2026-04-23", "input_tokens": 1309712082, "output_tokens": 7901149, "cached_input_tokens": 1034502151, "reasoning_tokens": 2685343, "unsplit_tokens": 3707150, "total_tokens": 1373827667, "estimated_cost_usd": 987.198282, "credits": 0.0, "records": 14423, "method": "demo"}, {"local_date": "2026-04-22", "input_tokens": 291504819, "output_tokens": 1548826, "cached_input_tokens": 82324401, "reasoning_tokens": 272810, "unsplit_tokens": 0, "total_tokens": 344238805, "estimated_cost_usd": 491.729253, "credits": 0.0, "records": 6751, "method": "demo"}, {"local_date": "2026-04-21", "input_tokens": 443014376, "output_tokens": 2860189, "cached_input_tokens": 234451128, "reasoning_tokens": 668359, "unsplit_tokens": 984303, "total_tokens": 496721902, "estimated_cost_usd": 549.826628, "credits": 0.0, "records": 7964, "method": "demo"}, {"local_date": "2026-04-20", "input_tokens": 433861778, "output_tokens": 2503790, "cached_input_tokens": 223666536, "reasoning_tokens": 536879, "unsplit_tokens": 616748, "total_tokens": 485523225, "estimated_cost_usd": 547.802664, "credits": 0.0, "records": 7488, "method": "demo"}, {"local_date": "2026-04-19", "input_tokens": 785556785, "output_tokens": 4196200, "cached_input_tokens": 550936442, "reasoning_tokens": 1129801, "unsplit_tokens": 4313464, "total_tokens": 841285231, "estimated_cost_usd": 734.070833, "credits": 7.531375, "records": 9683, "method": "demo"}, {"local_date": "2026-04-18", "input_tokens": 1978128498, "output_tokens": 8423405, "cached_input_tokens": 1627858338, "reasoning_tokens": 1761282, "unsplit_tokens": 37065505, "total_tokens": 2069514064, "estimated_cost_usd": 1341.708503, "credits": 0.0, "records": 15189, "method": "demo"}, {"local_date": "2026-04-17", "input_tokens": 305193077, "output_tokens": 1403888, "cached_input_tokens": 119267729, "reasoning_tokens": 179021, "unsplit_tokens": 974323, "total_tokens": 352145819, "estimated_cost_usd": 450.34425, "credits": 0.0, "records": 6083, "method": "demo"}, {"local_date": "2026-04-16", "input_tokens": 487858386, "output_tokens": 2513494, "cached_input_tokens": 291605515, "reasoning_tokens": 614472, "unsplit_tokens": 2995043, "total_tokens": 536619328, "estimated_cost_usd": 537.829765, "credits": 0.0, "records": 7202, "method": "demo"}, {"local_date": "2026-04-15", "input_tokens": 527613734, "output_tokens": 2525443, "cached_input_tokens": 337137760, "reasoning_tokens": 563455, "unsplit_tokens": 2207794, "total_tokens": 574277252, "estimated_cost_usd": 537.024843, "credits": 0.0, "records": 7356, "method": "demo"}, {"local_date": "2026-04-14", "input_tokens": 427874408, "output_tokens": 1717663, "cached_input_tokens": 243855874, "reasoning_tokens": 372784, "unsplit_tokens": 1029039, "total_tokens": 471229261, "estimated_cost_usd": 487.245413, "credits": 0.0, "records": 6520, "method": "demo"}, {"local_date": "2026-04-13", "input_tokens": 1411946826, "output_tokens": 4826038, "cached_input_tokens": 1159106860, "reasoning_tokens": 1262327, "unsplit_tokens": 32622544, "total_tokens": 1488681435, "estimated_cost_usd": 936.675542, "credits": 0.0, "records": 11426, "method": "demo"}, {"local_date": "2026-04-12", "input_tokens": 290422229, "output_tokens": 1178173, "cached_input_tokens": 129217946, "reasoning_tokens": 131741, "unsplit_tokens": 1069160, "total_tokens": 330633464, "estimated_cost_usd": 397.33431, "credits": 0.0, "records": 5214, "method": "demo"}, {"local_date": "2026-04-11", "input_tokens": 185073037, "output_tokens": 777217, "cached_input_tokens": 37649532, "reasoning_tokens": 21158, "unsplit_tokens": 0, "total_tokens": 222492029, "estimated_cost_usd": 335.914104, "credits": 0.0, "records": 4522, "method": "demo"}, {"local_date": "2026-04-10", "input_tokens": 234794129, "output_tokens": 998689, "cached_input_tokens": 86751172, "reasoning_tokens": 108176, "unsplit_tokens": 668700, "total_tokens": 271781168, "estimated_cost_usd": 354.998405, "credits": 0.0, "records": 4751, "method": "demo"}, {"local_date": "2026-04-09", "input_tokens": 1314501717, "output_tokens": 5593287, "cached_input_tokens": 1082938634, "reasoning_tokens": 1732120, "unsplit_tokens": 5743741, "total_tokens": 1359836270, "estimated_cost_usd": 947.292644, "credits": 0.0, "records": 12295, "method": "demo"}, {"local_date": "2026-04-08", "input_tokens": 607927921, "output_tokens": 2264102, "cached_input_tokens": 305847327, "reasoning_tokens": 455033, "unsplit_tokens": 1091804, "total_tokens": 643959224, "estimated_cost_usd": 925.554822, "credits": 0.0, "records": 7819, "method": "demo"}, {"local_date": "2026-04-07", "input_tokens": 539890265, "output_tokens": 3292073, "cached_input_tokens": 445617823, "reasoning_tokens": 463362, "unsplit_tokens": 1562302, "total_tokens": 742502417, "estimated_cost_usd": 462.759563, "credits": 0.0, "records": 8838, "method": "demo"}, {"local_date": "2026-04-06", "input_tokens": 559048093, "output_tokens": 3324316, "cached_input_tokens": 413944097, "reasoning_tokens": 670107, "unsplit_tokens": 609025, "total_tokens": 593012580, "estimated_cost_usd": 472.086357, "credits": 0.0, "records": 6765, "method": "demo"}, {"local_date": "2026-04-05", "input_tokens": 144554069, "output_tokens": 592373, "cached_input_tokens": 28796775, "reasoning_tokens": 2439, "unsplit_tokens": 0, "total_tokens": 173855462, "estimated_cost_usd": 263.391816, "credits": 0.0, "records": 3542, "method": "demo"}, {"local_date": "2026-04-04", "input_tokens": 138142150, "output_tokens": 591112, "cached_input_tokens": 27721588, "reasoning_tokens": 24021, "unsplit_tokens": 0, "total_tokens": 166120156, "estimated_cost_usd": 251.700451, "credits": 0.0, "records": 3376, "method": "demo"}], "by_terminal": [{"input_tokens": 14247933016, "output_tokens": 60635826, "cached_input_tokens": 13142599654, "reasoning_tokens": 18837844, "unsplit_tokens": 141720560, "total_tokens": 14450289398, "estimated_cost_usd": 9951.133396, "credits": 0.0, "records": 94724, "terminal": "Codex Desktop", "method": "demo"}, {"input_tokens": 7326386516, "output_tokens": 30165772, "cached_input_tokens": 1562973171, "reasoning_tokens": 0, "unsplit_tokens": 0, "total_tokens": 8919525460, "estimated_cost_usd": 13506.405927, "credits": 0.0, "records": 177301, "terminal": "claude-code", "method": "demo"}, {"input_tokens": 378657846, "output_tokens": 2563441, "cached_input_tokens": 345715329, "reasoning_tokens": 1105383, "unsplit_tokens": 351949, "total_tokens": 381573240, "estimated_cost_usd": 209.321217, "credits": 0.0, "records": 3514, "terminal": "CLI", "method": "demo"}, {"input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 614645, "total_tokens": 614645, "estimated_cost_usd": 0.0, "credits": 26.501514, "records": 10, "terminal": "Warp", "method": "demo"}, {"input_tokens": 336959, "output_tokens": 8234, "cached_input_tokens": 185714, "reasoning_tokens": 3935, "unsplit_tokens": 0, "total_tokens": 345192, "estimated_cost_usd": 1.09608, "credits": 0.0, "records": 16, "terminal": "codex_exec", "method": "demo"}, {"input_tokens": 163060, "output_tokens": 1655, "cached_input_tokens": 162920, "reasoning_tokens": 0, "unsplit_tokens": 0, "total_tokens": 327635, "estimated_cost_usd": 0.123535, "credits": 0.0, "records": 10, "terminal": "VS Code", "method": "demo"}, {"input_tokens": 0, "output_tokens": 218805, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "total_tokens": 218805, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 140, "terminal": "augment", "method": "demo"}], "by_model": [{"input_tokens": 8471637847, "output_tokens": 43838429, "cached_input_tokens": 7851382587, "reasoning_tokens": 14999441, "unsplit_tokens": 97883874, "total_tokens": 8613360153, "estimated_cost_usd": 4171.060237, "credits": 0.0, "records": 56581, "model_label": "GPT-5.4", "method": "demo"}, {"input_tokens": 6155289974, "output_tokens": 19369072, "cached_input_tokens": 5637118110, "reasoning_tokens": 4947721, "unsplit_tokens": 44188635, "total_tokens": 6218847677, "estimated_cost_usd": 5990.490456, "credits": 0.0, "records": 41673, "model_label": "GPT-5.5", "method": "demo"}, {"input_tokens": 3302096506, "output_tokens": 13821787, "cached_input_tokens": 1434660581, "reasoning_tokens": 0, "unsplit_tokens": 421900, "total_tokens": 4751000775, "estimated_cost_usd": 13082.969493, "credits": 18.970139, "records": 53715, "model_label": "Claude Opus 4.6", "method": "demo"}, {"input_tokens": 3785317630, "output_tokens": 15145470, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "total_tokens": 3800463100, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 119256, "model_label": "Claude Opus 4.7", "method": "demo"}, {"input_tokens": 215204105, "output_tokens": 912545, "cached_input_tokens": 126855835, "reasoning_tokens": 0, "unsplit_tokens": 0, "total_tokens": 342972485, "estimated_cost_usd": 399.490047, "credits": 0.0, "records": 3515, "model_label": "Claude Sonnet 4.6", "method": "demo"}, {"input_tokens": 23931335, "output_tokens": 287625, "cached_input_tokens": 1619675, "reasoning_tokens": 0, "unsplit_tokens": 192745, "total_tokens": 26031380, "estimated_cost_usd": 24.069922, "credits": 7.531375, "records": 835, "model_label": "Claude Haiku 4.5", "method": "demo"}, {"input_tokens": 0, "output_tokens": 218805, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "total_tokens": 218805, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 140, "model_label": "unknown", "method": "demo"}], "by_source": [{"local_date": "2026-05-03", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 706712822, "output_tokens": 2436564, "cached_input_tokens": 670282864, "reasoning_tokens": 668716, "unsplit_tokens": 708487, "total_tokens": 709857873, "credits": 0.0, "records": 4974, "estimated_cost_usd": 590.388138, "method": "exact"}, {"local_date": "2026-05-03", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 43348606, "output_tokens": 208754, "cached_input_tokens": 40780483, "reasoning_tokens": 104978, "unsplit_tokens": 82325, "total_tokens": 43639685, "credits": 0.0, "records": 309, "estimated_cost_usd": 19.746733, "method": "exact"}, {"local_date": "2026-05-03", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 178807830, "input_tokens": 178095251, "output_tokens": 712579, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 5611}, {"local_date": "2026-05-03", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 217646350, "input_tokens": 151284564, "output_tokens": 633241, "cached_input_tokens": 65728545, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 599.392333, "credits": 0.0, "records": 2461}, {"local_date": "2026-05-02", "app": "warp", "source": "warp", "originator": "", "model_label": "Claude Opus 4.6", "input_tokens": null, "output_tokens": null, "cached_input_tokens": null, "reasoning_tokens": null, "unsplit_tokens": 421900, "total_tokens": 421900, "credits": 18.970139, "records": 5, "estimated_cost_usd": null, "method": "partial"}, {"local_date": "2026-05-02", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 735807541, "output_tokens": 2771654, "cached_input_tokens": 704905377, "reasoning_tokens": 911548, "unsplit_tokens": 483898, "total_tokens": 739063092, "credits": 0.0, "records": 6075, "estimated_cost_usd": 590.113122, "method": "exact"}, {"local_date": "2026-05-02", "app": "codex", "source": "codex:exec", "originator": "codex_exec", "model_label": "GPT-5.5", "input_tokens": 83167, "output_tokens": 4844, "cached_input_tokens": 20816, "reasoning_tokens": 1645, "unsplit_tokens": 0, "total_tokens": 88010, "credits": 0.0, "records": 3, "estimated_cost_usd": 0.467472, "method": "exact"}, {"local_date": "2026-05-02", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 4233295, "output_tokens": 34809, "cached_input_tokens": 2996332, "reasoning_tokens": 22510, "unsplit_tokens": 0, "total_tokens": 4268104, "credits": 0.0, "records": 48, "estimated_cost_usd": 4.363622, "method": "exact"}, {"local_date": "2026-05-02", "app": "claude-code", "source": "claude-code:sdk-ts", "originator": "", "model_label": "Claude Sonnet 4.6", "input_tokens": 174220, "output_tokens": 5, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 174225, "credits": 0.0, "records": 5, "estimated_cost_usd": 0.522735, "method": "exact"}, {"local_date": "2026-05-02", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 175211121, "input_tokens": 174512876, "output_tokens": 698245, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 5498}, {"local_date": "2026-05-02", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 213268406, "input_tokens": 148241483, "output_tokens": 620503, "cached_input_tokens": 64406419, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 587.335591, "credits": 0.0, "records": 2411}, {"local_date": "2026-05-01", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 518181220, "output_tokens": 2326698, "cached_input_tokens": 494620092, "reasoning_tokens": 630588, "unsplit_tokens": 3743862, "total_tokens": 524251779, "credits": 0.0, "records": 4369, "estimated_cost_usd": 434.916609, "method": "exact"}, {"local_date": "2026-05-01", "app": "codex", "source": "codex:vscode", "originator": "slock-daemon", "model_label": "GPT-5.5", "input_tokens": 51397811, "output_tokens": 208342, "cached_input_tokens": 49474377, "reasoning_tokens": 31256, "unsplit_tokens": 0, "total_tokens": 51606153, "credits": 0.0, "records": 1135, "estimated_cost_usd": 40.604628, "method": "exact"}, {"local_date": "2026-05-01", "app": "codex", "source": "codex:exec", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 66722, "output_tokens": 861, "cached_input_tokens": 11020, "reasoning_tokens": 820, "unsplit_tokens": 0, "total_tokens": 67583, "credits": 0.0, "records": 3, "estimated_cost_usd": 0.309848, "method": "exact"}, {"local_date": "2026-05-01", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 5390935, "output_tokens": 32127, "cached_input_tokens": 4158783, "reasoning_tokens": 6955, "unsplit_tokens": 64506, "total_tokens": 5487567, "credits": 0.0, "records": 115, "estimated_cost_usd": 4.601979, "method": "exact"}, {"local_date": "2026-05-01", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 171614412, "input_tokens": 170930500, "output_tokens": 683912, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 5385}, {"local_date": "2026-05-01", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 208890462, "input_tokens": 145198403, "output_tokens": 607766, "cached_input_tokens": 63084294, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 575.278848, "credits": 0.0, "records": 2362}, {"local_date": "2026-04-30", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 370314035, "output_tokens": 1425446, "cached_input_tokens": 338073682, "reasoning_tokens": 374309, "unsplit_tokens": 490562, "total_tokens": 372230043, "credits": 0.0, "records": 2634, "estimated_cost_usd": 373.00198, "method": "exact"}, {"local_date": "2026-04-30", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.5", "input_tokens": 723538, "output_tokens": 11358, "cached_input_tokens": 534695, "reasoning_tokens": 5195, "unsplit_tokens": 0, "total_tokens": 734896, "credits": 0.0, "records": 32, "estimated_cost_usd": 1.552315, "method": "exact"}, {"local_date": "2026-04-30", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 3824930, "output_tokens": 34407, "cached_input_tokens": 3105312, "reasoning_tokens": 20440, "unsplit_tokens": 0, "total_tokens": 3859337, "credits": 0.0, "records": 51, "estimated_cost_usd": 3.091479, "method": "exact"}, {"local_date": "2026-04-30", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 168017703, "input_tokens": 167348125, "output_tokens": 669578, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 5272}, {"local_date": "2026-04-30", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 204512518, "input_tokens": 142155322, "output_tokens": 595028, "cached_input_tokens": 61762168, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 563.222105, "credits": 0.0, "records": 2312}, {"local_date": "2026-04-29", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 302800585, "output_tokens": 1083398, "cached_input_tokens": 271128661, "reasoning_tokens": 268215, "unsplit_tokens": 5214098, "total_tokens": 309098081, "credits": 0.0, "records": 1881, "estimated_cost_usd": 326.42589, "method": "exact"}, {"local_date": "2026-04-29", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 1701307, "output_tokens": 23508, "cached_input_tokens": 1081635, "reasoning_tokens": 16910, "unsplit_tokens": 0, "total_tokens": 1724815, "credits": 0.0, "records": 19, "estimated_cost_usd": 2.172206, "method": "exact"}, {"local_date": "2026-04-29", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 164420993, "input_tokens": 163765748, "output_tokens": 655245, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 5159}, {"local_date": "2026-04-29", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 200134574, "input_tokens": 139112242, "output_tokens": 582291, "cached_input_tokens": 60440042, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 551.165362, "credits": 0.0, "records": 2263}, {"local_date": "2026-04-28", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 451717676, "output_tokens": 1945960, "cached_input_tokens": 416609337, "reasoning_tokens": 506493, "unsplit_tokens": 3411633, "total_tokens": 457075269, "credits": 0.0, "records": 3377, "estimated_cost_usd": 442.225171, "method": "exact"}, {"local_date": "2026-04-28", "app": "codex", "source": "codex:exec", "originator": "codex_exec", "model_label": "GPT-5.5", "input_tokens": 253792, "output_tokens": 3390, "cached_input_tokens": 164898, "reasoning_tokens": 2290, "unsplit_tokens": 0, "total_tokens": 257182, "credits": 0.0, "records": 13, "estimated_cost_usd": 0.628608, "method": "exact"}, {"local_date": "2026-04-28", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 2861488, "output_tokens": 42650, "cached_input_tokens": 895512, "reasoning_tokens": 25284, "unsplit_tokens": 52245, "total_tokens": 2956383, "credits": 0.0, "records": 38, "estimated_cost_usd": 5.778568, "method": "exact"}, {"local_date": "2026-04-28", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 160824284, "input_tokens": 160183373, "output_tokens": 640911, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 5047}, {"local_date": "2026-04-28", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 195756631, "input_tokens": 136069162, "output_tokens": 569553, "cached_input_tokens": 59117916, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 539.108622, "credits": 0.0, "records": 2213}, {"local_date": "2026-04-27", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 69681518, "output_tokens": 248330, "cached_input_tokens": 62814809, "reasoning_tokens": 49554, "unsplit_tokens": 0, "total_tokens": 69929848, "credits": 0.0, "records": 459, "estimated_cost_usd": 73.190836, "method": "exact"}, {"local_date": "2026-04-27", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 14716098, "output_tokens": 155718, "cached_input_tokens": 13119208, "reasoning_tokens": 68176, "unsplit_tokens": 203655, "total_tokens": 15075471, "credits": 0.0, "records": 102, "estimated_cost_usd": 9.607795, "method": "exact"}, {"local_date": "2026-04-27", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 157227575, "input_tokens": 156600997, "output_tokens": 626578, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4934}, {"local_date": "2026-04-27", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 191378687, "input_tokens": 133026082, "output_tokens": 556815, "cached_input_tokens": 57795790, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 527.051879, "credits": 0.0, "records": 2164}, {"local_date": "2026-04-26", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 1800872058, "output_tokens": 3698875, "cached_input_tokens": 1594117622, "reasoning_tokens": 659979, "unsplit_tokens": 21889664, "total_tokens": 1826460597, "credits": 0.0, "records": 9652, "estimated_cost_usd": 1941.797234, "method": "exact"}, {"local_date": "2026-04-26", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.5", "input_tokens": 1836451, "output_tokens": 28186, "cached_input_tokens": 1646942, "reasoning_tokens": 16314, "unsplit_tokens": 0, "total_tokens": 1864637, "credits": 0.0, "records": 54, "estimated_cost_usd": 2.616586, "method": "exact"}, {"local_date": "2026-04-26", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 79543026, "output_tokens": 645346, "cached_input_tokens": 73637278, "reasoning_tokens": 320868, "unsplit_tokens": 68772, "total_tokens": 80257144, "credits": 0.0, "records": 698, "estimated_cost_usd": 42.853872, "method": "exact"}, {"local_date": "2026-04-26", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 153630866, "input_tokens": 153018622, "output_tokens": 612244, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4821}, {"local_date": "2026-04-26", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 187000743, "input_tokens": 129983001, "output_tokens": 544078, "cached_input_tokens": 56473664, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 514.995136, "credits": 0.0, "records": 2114}, {"local_date": "2026-04-25", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 1042535703, "output_tokens": 2949014, "cached_input_tokens": 937413967, "reasoning_tokens": 767591, "unsplit_tokens": 7831459, "total_tokens": 1053316176, "credits": 0.0, "records": 6282, "estimated_cost_usd": 1082.786077, "method": "exact"}, {"local_date": "2026-04-25", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 209793842, "output_tokens": 1548823, "cached_input_tokens": 196183626, "reasoning_tokens": 621777, "unsplit_tokens": 344471, "total_tokens": 211687136, "credits": 0.0, "records": 1757, "estimated_cost_usd": 106.303792, "method": "exact"}, {"local_date": "2026-04-25", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 3352037, "output_tokens": 107181, "cached_input_tokens": 2964087, "reasoning_tokens": 66301, "unsplit_tokens": 0, "total_tokens": 3459219, "credits": 0.0, "records": 77, "estimated_cost_usd": 3.318618, "method": "exact"}, {"local_date": "2026-04-25", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 150034157, "input_tokens": 149436246, "output_tokens": 597911, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4708}, {"local_date": "2026-04-25", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 182622799, "input_tokens": 126939921, "output_tokens": 531340, "cached_input_tokens": 55151538, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 502.938394, "credits": 0.0, "records": 2065}, {"local_date": "2026-04-24", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.5", "input_tokens": 102305335, "output_tokens": 226152, "cached_input_tokens": 95298951, "reasoning_tokens": 53208, "unsplit_tokens": 414972, "total_tokens": 102946458, "credits": 0.0, "records": 730, "estimated_cost_usd": 89.465942, "method": "exact"}, {"local_date": "2026-04-24", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 14102099, "output_tokens": 88986, "cached_input_tokens": 12134716, "reasoning_tokens": 53495, "unsplit_tokens": 0, "total_tokens": 14191085, "credits": 0.0, "records": 96, "estimated_cost_usd": 9.286927, "method": "exact"}, {"local_date": "2026-04-24", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 2874533, "output_tokens": 30922, "cached_input_tokens": 2474290, "reasoning_tokens": 17057, "unsplit_tokens": 0, "total_tokens": 2905455, "credits": 0.0, "records": 105, "estimated_cost_usd": 2.083004, "method": "exact"}, {"local_date": "2026-04-24", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 146437447, "input_tokens": 145853870, "output_tokens": 583577, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4595}, {"local_date": "2026-04-24", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 178244855, "input_tokens": 123896840, "output_tokens": 518603, "cached_input_tokens": 53829412, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 490.881651, "credits": 0.0, "records": 2015}, {"local_date": "2026-04-23", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 1008060624, "output_tokens": 6481794, "cached_input_tokens": 954012365, "reasoning_tokens": 2518410, "unsplit_tokens": 3707150, "total_tokens": 1018249568, "credits": 0.0, "records": 7481, "estimated_cost_usd": 470.850656, "method": "exact"}, {"local_date": "2026-04-23", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 31775049, "output_tokens": 319806, "cached_input_tokens": 27982500, "reasoning_tokens": 166933, "unsplit_tokens": 0, "total_tokens": 32094855, "credits": 0.0, "records": 364, "estimated_cost_usd": 21.274088, "method": "exact"}, {"local_date": "2026-04-23", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Sonnet 4.6", "input_tokens": 5016190, "output_tokens": 15230, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 5031420, "credits": 0.0, "records": 70, "estimated_cost_usd": 15.27702, "method": "exact"}, {"local_date": "2026-04-23", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Opus 4.7", "input_tokens": 793530, "output_tokens": 3175, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 796705, "credits": 0.0, "records": 25, "estimated_cost_usd": null, "method": "exact"}, {"local_date": "2026-04-23", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 142840738, "input_tokens": 142271494, "output_tokens": 569244, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4482}, {"local_date": "2026-04-23", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 173866911, "input_tokens": 120853760, "output_tokens": 505865, "cached_input_tokens": 52507286, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 478.824908, "credits": 0.0, "records": 1966}, {"local_date": "2026-04-23", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Haiku 4.5", "input_tokens": 941435, "output_tokens": 6035, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 947470, "credits": 0.0, "records": 35, "estimated_cost_usd": 0.97161, "method": "exact"}, {"local_date": "2026-04-22", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 35005020, "output_tokens": 500789, "cached_input_tokens": 31139241, "reasoning_tokens": 272810, "unsplit_tokens": 0, "total_tokens": 35505808, "credits": 0.0, "records": 466, "estimated_cost_usd": 24.961085, "method": "exact"}, {"local_date": "2026-04-22", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 139244029, "input_tokens": 138689119, "output_tokens": 554910, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4369}, {"local_date": "2026-04-22", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 169488968, "input_tokens": 117810680, "output_tokens": 493127, "cached_input_tokens": 51185160, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 466.768168, "credits": 0.0, "records": 1916}, {"local_date": "2026-04-21", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 192960916, "output_tokens": 1837510, "cached_input_tokens": 184577074, "reasoning_tokens": 667415, "unsplit_tokens": 984303, "total_tokens": 195782729, "credits": 0.0, "records": 1837, "estimated_cost_usd": 94.66652, "method": "exact"}, {"local_date": "2026-04-21", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 179117, "output_tokens": 1712, "cached_input_tokens": 11020, "reasoning_tokens": 944, "unsplit_tokens": 0, "total_tokens": 180829, "credits": 0.0, "records": 3, "estimated_cost_usd": 0.448683, "method": "exact"}, {"local_date": "2026-04-21", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 135647320, "input_tokens": 135106743, "output_tokens": 540577, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4257}, {"local_date": "2026-04-21", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 165111024, "input_tokens": 114767600, "output_tokens": 480390, "cached_input_tokens": 49863034, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 454.711425, "credits": 0.0, "records": 1867}, {"local_date": "2026-04-20", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 138871901, "output_tokens": 955914, "cached_input_tokens": 126726355, "reasoning_tokens": 368126, "unsplit_tokens": 550141, "total_tokens": 140377956, "credits": 0.0, "records": 1151, "estimated_cost_usd": 76.384158, "method": "exact"}, {"local_date": "2026-04-20", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 51740991, "output_tokens": 553981, "cached_input_tokens": 48399273, "reasoning_tokens": 168753, "unsplit_tokens": 66607, "total_tokens": 52361579, "credits": 0.0, "records": 376, "estimated_cost_usd": 28.763824, "method": "exact"}, {"local_date": "2026-04-20", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 132050610, "input_tokens": 131524367, "output_tokens": 526243, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4144}, {"local_date": "2026-04-20", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 160733080, "input_tokens": 111724519, "output_tokens": 467652, "cached_input_tokens": 48540908, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 442.654682, "credits": 0.0, "records": 1817}, {"local_date": "2026-04-19", "app": "warp", "source": "warp", "originator": "", "model_label": "Claude Haiku 4.5", "input_tokens": null, "output_tokens": null, "cached_input_tokens": null, "reasoning_tokens": null, "unsplit_tokens": 192745, "total_tokens": 192745, "credits": 7.531375, "records": 5, "estimated_cost_usd": null, "method": "partial"}, {"local_date": "2026-04-19", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 542541510, "output_tokens": 3220975, "cached_input_tokens": 503717660, "reasoning_tokens": 1129801, "unsplit_tokens": 4120719, "total_tokens": 549883204, "credits": 0.0, "records": 3689, "estimated_cost_usd": 271.303669, "method": "exact"}, {"local_date": "2026-04-19", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 128453901, "input_tokens": 127941991, "output_tokens": 511910, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 4031}, {"local_date": "2026-04-19", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Opus 4.6", "input_tokens": 6391845, "output_tokens": 8400, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 6400245, "credits": 0.0, "records": 190, "estimated_cost_usd": 32.169225, "method": "exact"}, {"local_date": "2026-04-19", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 156355136, "input_tokens": 108681439, "output_tokens": 454915, "cached_input_tokens": 47218782, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 430.597939, "credits": 0.0, "records": 1768}, {"local_date": "2026-04-18", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 1730554898, "output_tokens": 7325801, "cached_input_tokens": 1565349814, "reasoning_tokens": 1704882, "unsplit_tokens": 37065505, "total_tokens": 1774946204, "credits": 0.0, "records": 9381, "estimated_cost_usd": 914.237178, "method": "exact"}, {"local_date": "2026-04-18", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 17575625, "output_tokens": 157851, "cached_input_tokens": 16611867, "reasoning_tokens": 56400, "unsplit_tokens": 0, "total_tokens": 17733476, "credits": 0.0, "records": 172, "estimated_cost_usd": 8.930128, "method": "exact"}, {"local_date": "2026-04-18", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 124857192, "input_tokens": 124359616, "output_tokens": 497576, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3918}, {"local_date": "2026-04-18", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 151977192, "input_tokens": 105638359, "output_tokens": 442177, "cached_input_tokens": 45896657, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 418.541197, "credits": 0.0, "records": 1718}, {"local_date": "2026-04-17", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 81820558, "output_tokens": 491206, "cached_input_tokens": 74693198, "reasoning_tokens": 179021, "unsplit_tokens": 974323, "total_tokens": 83286087, "credits": 0.0, "records": 609, "estimated_cost_usd": 43.859794, "method": "exact"}, {"local_date": "2026-04-17", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 121260483, "input_tokens": 120777240, "output_tokens": 483243, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3805}, {"local_date": "2026-04-17", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 147599249, "input_tokens": 102595279, "output_tokens": 429439, "cached_input_tokens": 44574531, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 406.484456, "credits": 0.0, "records": 1669}, {"local_date": "2026-04-16", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 221392575, "output_tokens": 1276093, "cached_input_tokens": 202700781, "reasoning_tokens": 458177, "unsplit_tokens": 2911373, "total_tokens": 225580041, "credits": 0.0, "records": 1425, "estimated_cost_usd": 116.546075, "method": "exact"}, {"local_date": "2026-04-16", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 49718749, "output_tokens": 351790, "cached_input_tokens": 45652329, "reasoning_tokens": 156295, "unsplit_tokens": 83670, "total_tokens": 50154209, "credits": 0.0, "records": 466, "estimated_cost_usd": 26.855976, "method": "exact"}, {"local_date": "2026-04-16", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 117663773, "input_tokens": 117194864, "output_tokens": 468909, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3692}, {"local_date": "2026-04-16", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 143221305, "input_tokens": 99552198, "output_tokens": 416702, "cached_input_tokens": 43252405, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 394.427714, "credits": 0.0, "records": 1619}, {"local_date": "2026-04-15", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 296030872, "output_tokens": 1569754, "cached_input_tokens": 275691935, "reasoning_tokens": 529641, "unsplit_tokens": 2207794, "total_tokens": 299808421, "credits": 0.0, "records": 2006, "estimated_cost_usd": 143.31664, "method": "exact"}, {"local_date": "2026-04-15", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 21187596, "output_tokens": 73364, "cached_input_tokens": 19515546, "reasoning_tokens": 33814, "unsplit_tokens": 0, "total_tokens": 21260961, "credits": 0.0, "records": 191, "estimated_cost_usd": 10.159477, "method": "exact"}, {"local_date": "2026-04-15", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Sonnet 4.6", "input_tokens": 273660, "output_tokens": 23785, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 297445, "credits": 0.0, "records": 10, "estimated_cost_usd": 1.177755, "method": "exact"}, {"local_date": "2026-04-15", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 114067064, "input_tokens": 113612488, "output_tokens": 454576, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3579}, {"local_date": "2026-04-15", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 138843361, "input_tokens": 96509118, "output_tokens": 403964, "cached_input_tokens": 41930279, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 382.370971, "credits": 0.0, "records": 1570}, {"local_date": "2026-04-14", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 133485912, "output_tokens": 540597, "cached_input_tokens": 120210017, "reasoning_tokens": 193275, "unsplit_tokens": 961784, "total_tokens": 134988293, "credits": 0.0, "records": 794, "estimated_cost_usd": 71.351201, "method": "exact"}, {"local_date": "2026-04-14", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 90892345, "output_tokens": 345597, "cached_input_tokens": 83037704, "reasoning_tokens": 179509, "unsplit_tokens": 67255, "total_tokens": 91305196, "credits": 0.0, "records": 740, "estimated_cost_usd": 45.579984, "method": "exact"}, {"local_date": "2026-04-14", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 110470355, "input_tokens": 110030113, "output_tokens": 440242, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3466}, {"local_date": "2026-04-14", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 134465417, "input_tokens": 93466038, "output_tokens": 391227, "cached_input_tokens": 40608153, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 370.314228, "credits": 0.0, "records": 1520}, {"local_date": "2026-04-13", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 1117284221, "output_tokens": 3589449, "cached_input_tokens": 1029174544, "reasoning_tokens": 1089147, "unsplit_tokens": 32488127, "total_tokens": 1153361797, "credits": 0.0, "records": 5829, "estimated_cost_usd": 531.409557, "method": "exact"}, {"local_date": "2026-04-13", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 97791911, "output_tokens": 432191, "cached_input_tokens": 90646289, "reasoning_tokens": 173180, "unsplit_tokens": 134417, "total_tokens": 98358519, "credits": 0.0, "records": 772, "estimated_cost_usd": 47.0085, "method": "exact"}, {"local_date": "2026-04-13", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 106873646, "input_tokens": 106447737, "output_tokens": 425909, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3354}, {"local_date": "2026-04-13", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 130087473, "input_tokens": 90422957, "output_tokens": 378489, "cached_input_tokens": 39286027, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 358.257485, "credits": 0.0, "records": 1471}, {"local_date": "2026-04-12", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 100176992, "output_tokens": 400846, "cached_input_tokens": 91254045, "reasoning_tokens": 131741, "unsplit_tokens": 1069160, "total_tokens": 101646998, "credits": 0.0, "records": 552, "estimated_cost_usd": 51.133565, "method": "exact"}, {"local_date": "2026-04-12", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 103276936, "input_tokens": 102865360, "output_tokens": 411576, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3241}, {"local_date": "2026-04-12", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 125709530, "input_tokens": 87379877, "output_tokens": 365751, "cached_input_tokens": 37963901, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 346.200745, "credits": 0.0, "records": 1421}, {"local_date": "2026-04-11", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 1453255, "output_tokens": 26961, "cached_input_tokens": 1007757, "reasoning_tokens": 21158, "unsplit_tokens": 0, "total_tokens": 1480216, "credits": 0.0, "records": 22, "estimated_cost_usd": 1.770102, "method": "exact"}, {"local_date": "2026-04-11", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 99680227, "input_tokens": 99282985, "output_tokens": 397242, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3128}, {"local_date": "2026-04-11", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 121331586, "input_tokens": 84336797, "output_tokens": 353014, "cached_input_tokens": 36641775, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 334.144002, "credits": 0.0, "records": 1372}, {"local_date": "2026-04-10", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 56551456, "output_tokens": 262357, "cached_input_tokens": 50629073, "reasoning_tokens": 99901, "unsplit_tokens": 668700, "total_tokens": 57482513, "credits": 0.0, "records": 392, "estimated_cost_usd": 31.398581, "method": "exact"}, {"local_date": "2026-04-10", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 1248347, "output_tokens": 13147, "cached_input_tokens": 802450, "reasoning_tokens": 8275, "unsplit_tokens": 0, "total_tokens": 1261495, "credits": 0.0, "records": 22, "estimated_cost_usd": 1.512565, "method": "exact"}, {"local_date": "2026-04-10", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 96083518, "input_tokens": 95700609, "output_tokens": 382909, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 3015}, {"local_date": "2026-04-10", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 116953642, "input_tokens": 81293717, "output_tokens": 340276, "cached_input_tokens": 35319649, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 322.087259, "credits": 0.0, "records": 1322}, {"local_date": "2026-04-09", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 1095742896, "output_tokens": 4548073, "cached_input_tokens": 1045116206, "reasoning_tokens": 1685481, "unsplit_tokens": 5743741, "total_tokens": 1106034710, "credits": 0.0, "records": 7175, "estimated_cost_usd": 456.06687, "method": "exact"}, {"local_date": "2026-04-09", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 5702641, "output_tokens": 70561, "cached_input_tokens": 3824905, "reasoning_tokens": 46639, "unsplit_tokens": 0, "total_tokens": 5773203, "credits": 0.0, "records": 105, "estimated_cost_usd": 6.708987, "method": "exact"}, {"local_date": "2026-04-09", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 92486809, "input_tokens": 92118234, "output_tokens": 368575, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 2902}, {"local_date": "2026-04-09", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Opus 4.6", "input_tokens": 30157510, "output_tokens": 150605, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 30308115, "credits": 0.0, "records": 425, "estimated_cost_usd": 154.552675, "method": "exact"}, {"local_date": "2026-04-09", "app": "claude-code", "source": "claude-code:unknown", "originator": "", "model_label": "Claude Opus 4.6", "input_tokens": 1519830, "output_tokens": 34240, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 1554070, "credits": 0.0, "records": 45, "estimated_cost_usd": 8.45515, "method": "exact"}, {"local_date": "2026-04-09", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 112575698, "input_tokens": 78250636, "output_tokens": 327538, "cached_input_tokens": 33997523, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 310.030517, "credits": 0.0, "records": 1273}, {"local_date": "2026-04-09", "app": "claude-code", "source": "claude-code:unknown", "originator": "", "model_label": "Claude Haiku 4.5", "input_tokens": 11009970, "output_tokens": 93695, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 11103665, "credits": 0.0, "records": 370, "estimated_cost_usd": 11.478445, "method": "exact"}, {"local_date": "2026-04-08", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 293071157, "output_tokens": 1388714, "cached_input_tokens": 273171930, "reasoning_tokens": 455033, "unsplit_tokens": 1091804, "total_tokens": 295551675, "credits": 0.0, "records": 2127, "estimated_cost_usd": 138.871763, "method": "exact"}, {"local_date": "2026-04-08", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Sonnet 4.6", "input_tokens": 113513945, "output_tokens": 31510, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 113545455, "credits": 0.0, "records": 995, "estimated_cost_usd": 341.014485, "method": "exact"}, {"local_date": "2026-04-08", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 88890100, "input_tokens": 88535858, "output_tokens": 354242, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 2789}, {"local_date": "2026-04-08", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Opus 4.6", "input_tokens": 27063405, "output_tokens": 48380, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 27111785, "credits": 0.0, "records": 355, "estimated_cost_usd": 136.526525, "method": "exact"}, {"local_date": "2026-04-08", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 108197754, "input_tokens": 75207556, "output_tokens": 314801, "cached_input_tokens": 32675397, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 297.973774, "credits": 0.0, "records": 1223}, {"local_date": "2026-04-08", "app": "claude-code", "source": "claude-code:unknown", "originator": "", "model_label": "Claude Haiku 4.5", "input_tokens": 10536000, "output_tokens": 126455, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 10662455, "credits": 0.0, "records": 330, "estimated_cost_usd": 11.168275, "method": "exact"}, {"local_date": "2026-04-07", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 262935343, "output_tokens": 1404052, "cached_input_tokens": 247860047, "reasoning_tokens": 463362, "unsplit_tokens": 1562302, "total_tokens": 265901697, "credits": 0.0, "records": 1913, "estimated_cost_usd": 120.714036, "method": "exact"}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Sonnet 4.6", "input_tokens": 91408965, "output_tokens": 734340, "cached_input_tokens": 101397590, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 193540895, "credits": 0.0, "records": 1900, "estimated_cost_usd": 38.43779, "method": "exact"}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:unknown", "originator": "", "model_label": "Claude Sonnet 4.6", "input_tokens": 4817125, "output_tokens": 107675, "cached_input_tokens": 25458245, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 30383045, "credits": 0.0, "records": 535, "estimated_cost_usd": 3.060262, "method": "exact"}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 85293390, "input_tokens": 84953482, "output_tokens": 339908, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 2676}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Opus 4.6", "input_tokens": 22003885, "output_tokens": 122135, "cached_input_tokens": 37766075, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 59892095, "credits": 0.0, "records": 395, "estimated_cost_usd": 14.055317, "method": "exact"}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:vscode", "originator": "", "model_label": "Claude Opus 4.6", "input_tokens": 163060, "output_tokens": 1655, "cached_input_tokens": 162920, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 327635, "credits": 0.0, "records": 10, "estimated_cost_usd": 0.123535, "method": "exact"}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 103819810, "input_tokens": 72164475, "output_tokens": 302063, "cached_input_tokens": 31353271, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 285.917031, "credits": 0.0, "records": 1174}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:unknown", "originator": "", "model_label": "Claude Haiku 4.5", "input_tokens": 1411865, "output_tokens": 60630, "cached_input_tokens": 1479675, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 2952170, "credits": 0.0, "records": 90, "estimated_cost_usd": 0.444336, "method": "exact"}, {"local_date": "2026-04-07", "app": "claude-code", "source": "claude-code:cli", "originator": "", "model_label": "Claude Haiku 4.5", "input_tokens": 32065, "output_tokens": 810, "cached_input_tokens": 140000, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 172875, "credits": 0.0, "records": 5, "estimated_cost_usd": 0.007256, "method": "exact"}, {"local_date": "2026-04-07", "app": "augment", "source": "augment:history", "originator": "", "model_label": "unknown", "input_tokens": 0, "output_tokens": 218805, "cached_input_tokens": 0, "reasoning_tokens": null, "unsplit_tokens": 0, "total_tokens": 218805, "credits": 0.0, "records": 140, "estimated_cost_usd": null, "method": "estimated"}, {"local_date": "2026-04-06", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 406496675, "output_tokens": 2643621, "cached_input_tokens": 382301519, "reasoning_tokens": 660333, "unsplit_tokens": 609025, "total_tokens": 409749321, "credits": 0.0, "records": 3042, "estimated_cost_usd": 195.717584, "method": "exact"}, {"local_date": "2026-04-06", "app": "codex", "source": "codex:cli", "originator": "codex-tui", "model_label": "GPT-5.4", "input_tokens": 2058916, "output_tokens": 65794, "cached_input_tokens": 1611432, "reasoning_tokens": 9774, "unsplit_tokens": 0, "total_tokens": 2124711, "credits": 0.0, "records": 35, "estimated_cost_usd": 2.508482, "method": "exact"}, {"local_date": "2026-04-06", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 81696681, "input_tokens": 81371106, "output_tokens": 325575, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 2564}, {"local_date": "2026-04-06", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 99441867, "input_tokens": 69121396, "output_tokens": 289326, "cached_input_tokens": 30031146, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 273.860291, "credits": 0.0, "records": 1124}, {"local_date": "2026-04-05", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 687023, "output_tokens": 4544, "cached_input_tokens": 87755, "reasoning_tokens": 2439, "unsplit_tokens": 0, "total_tokens": 691567, "credits": 0.0, "records": 16, "estimated_cost_usd": 1.588268, "method": "exact"}, {"local_date": "2026-04-05", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 78099972, "input_tokens": 77788731, "output_tokens": 311241, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 2451}, {"local_date": "2026-04-05", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 95063923, "input_tokens": 66078315, "output_tokens": 276588, "cached_input_tokens": 28709020, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 261.803548, "credits": 0.0, "records": 1075}, {"local_date": "2026-04-04", "app": "codex", "source": "codex:vscode", "originator": "Codex Desktop", "model_label": "GPT-5.4", "input_tokens": 900560, "output_tokens": 30354, "cached_input_tokens": 334694, "reasoning_tokens": 24021, "unsplit_tokens": 0, "total_tokens": 930914, "credits": 0.0, "records": 13, "estimated_cost_usd": 1.953646, "method": "exact"}, {"local_date": "2026-04-04", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.7", "method": "demo", "total_tokens": 74503263, "input_tokens": 74206355, "output_tokens": 296908, "cached_input_tokens": 0, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 0.0, "credits": 0.0, "records": 2338}, {"local_date": "2026-04-04", "app": "claude-code", "source": "claude-code:cli", "originator": "Claude Code Demo", "model_label": "Claude Opus 4.6", "method": "demo", "total_tokens": 90685979, "input_tokens": 63035235, "output_tokens": 263850, "cached_input_tokens": 27386894, "reasoning_tokens": 0, "unsplit_tokens": 0, "estimated_cost_usd": 249.746805, "credits": 0.0, "records": 1025}]}</script>
+<script>window.TOKKIT_SCAN_COMMAND = "tok scan all && tok html last 30 open";</script>
+<script>
+const RAW = JSON.parse(document.getElementById('tokkit-data').textContent);
+const COLORS = ['#1b365d', '#b56b35', '#2f6f55', '#a38635', '#9b5864', '#596f83', '#6d6250', '#707a3f'];
+const LANGUAGE_KEY = 'tokkit.report.language';
+const I18N = {
+  zh: {
+    'doc.title': 'TokKit 用量报告（示例数据）- 最近 {days} 天',
+    'nav.overview': '总览',
+    'nav.filters': '筛选',
+    'nav.trend': '趋势',
+    'nav.models': '模型',
+    'nav.terminals': '终端',
+    'nav.details': '明细',
+    'actions.rescan': '重新扫描',
+    'actions.lang': 'EN',
+    'actions.langAria': '切换到英文',
+    'range.days': '{days} 天',
+    'hero.eyebrow': '本地 AI Token 账本',
+    'hero.title': 'TokKit 用量报告（示例数据）- 最近 {days} 天',
+    'hero.meta': '生成时间 {generated} · 时区 {timezone}',
+    'hero.noteLabel': '交互视图',
+    'hero.noteTitle': '趋势 · 模型 · 终端',
+    'hero.noteBody': '切换天数和模型筛选后，所有图表会同步重算。',
+    'filters.title': '筛选',
+    'filters.modelRange': '模型范围',
+    'filters.core': '只看核心模型',
+    'filters.all': '全部模型',
+    'filters.hintAll': '当前显示全部模型。时间范围：最近 {range} 天。',
+    'filters.hintSelected': '当前显示 {count} 个模型。时间范围：最近 {range} 天。',
+    'panel.totalTrend': '每日 Token 趋势',
+    'panel.costTrend': '预估费用趋势',
+    'panel.promptTrend': 'Prompt / Output / 缓存趋势',
+    'panel.cacheTrend': '缓存命中率趋势',
+    'panel.modelRank': '模型消耗排行',
+    'panel.modelTrend': '核心模型每日消耗',
+    'panel.terminalShare': '终端占比',
+    'panel.appRank': '应用维度',
+    'panel.recordTrend': '记录数趋势',
+    'panel.unsplitTrend': 'Unsplit 趋势',
+    'panel.details': '每日明细',
+    'summary.totalToken': '总 Token',
+    'summary.currentRange': '当前筛选范围',
+    'summary.estimatedCost': '预估费用',
+    'summary.apiPricedOnly': '仅 API 可估价记录',
+    'summary.dailyAvg': '日均 {value}',
+    'summary.prompt': 'Prompt',
+    'summary.output': 'Output',
+    'summary.generatedOutput': '生成输出',
+    'summary.cachedPrompt': '缓存 Prompt',
+    'summary.cacheHitRate': '命中率 {value}',
+    'summary.unsplit': 'Unsplit',
+    'summary.totalOnlyEvents': 'total-only 事件',
+    'chart.totalToken': '总 Token',
+    'chart.estimatedCost': '预估费用',
+    'chart.cachedPrompt': '缓存 Prompt',
+    'chart.cacheHitRate': '缓存命中率',
+    'chart.records': '记录数',
+    'chart.total': '总量',
+    'table.date': '日期',
+    'table.total': '总量',
+    'table.estimatedCost': '预估费用',
+    'table.prompt': 'Prompt',
+    'table.output': 'Output',
+    'table.cachedPrompt': '缓存 Prompt',
+    'table.reasoning': 'Reasoning',
+    'table.unsplit': 'Unsplit',
+    'table.records': '记录',
+    'empty': '暂无记录。',
+    'model.all': '全部模型',
+    'toast.copySuccess': '当前是静态 HTML，浏览器不能直接执行本地命令。已复制：{command}',
+    'toast.copyFallback': '当前是静态 HTML，请在终端执行：{command}',
+  },
+  en: {
+    'doc.title': 'TokKit Demo Usage Report - Last {days} Days',
+    'nav.overview': 'Overview',
+    'nav.filters': 'Filters',
+    'nav.trend': 'Trends',
+    'nav.models': 'Models',
+    'nav.terminals': 'Terminals',
+    'nav.details': 'Details',
+    'actions.rescan': 'Rescan',
+    'actions.lang': '中文',
+    'actions.langAria': 'Switch to Simplified Chinese',
+    'range.days': '{days} days',
+    'hero.eyebrow': 'Local AI Token Ledger',
+    'hero.title': 'TokKit Demo Usage Report - Last {days} Days',
+    'hero.meta': 'Generated {generated} · Time zone {timezone}',
+    'hero.noteLabel': 'Interactive view',
+    'hero.noteTitle': 'Trends · Models · Terminals',
+    'hero.noteBody': 'Charts update together when you change the range or model filters.',
+    'filters.title': 'Filters',
+    'filters.modelRange': 'Model scope',
+    'filters.core': 'Core models only',
+    'filters.all': 'All models',
+    'filters.hintAll': 'Showing all models. Range: last {range} days.',
+    'filters.hintSelected': 'Showing {count} models. Range: last {range} days.',
+    'panel.totalTrend': 'Daily Token Trend',
+    'panel.costTrend': 'Estimated Cost Trend',
+    'panel.promptTrend': 'Prompt / Output / Cached Trend',
+    'panel.cacheTrend': 'Cache Hit Rate Trend',
+    'panel.modelRank': 'Model Usage Ranking',
+    'panel.modelTrend': 'Core Model Daily Usage',
+    'panel.terminalShare': 'Terminal Share',
+    'panel.appRank': 'Application Breakdown',
+    'panel.recordTrend': 'Record Count Trend',
+    'panel.unsplitTrend': 'Unsplit Trend',
+    'panel.details': 'Daily Details',
+    'summary.totalToken': 'Total Tokens',
+    'summary.currentRange': 'Current filter range',
+    'summary.estimatedCost': 'Estimated Cost',
+    'summary.apiPricedOnly': 'Priced API records only',
+    'summary.dailyAvg': 'Daily avg {value}',
+    'summary.prompt': 'Prompt',
+    'summary.output': 'Output',
+    'summary.generatedOutput': 'Generated output',
+    'summary.cachedPrompt': 'Cached Prompt',
+    'summary.cacheHitRate': 'Hit rate {value}',
+    'summary.unsplit': 'Unsplit',
+    'summary.totalOnlyEvents': 'total-only events',
+    'chart.totalToken': 'Total Tokens',
+    'chart.estimatedCost': 'Estimated Cost',
+    'chart.cachedPrompt': 'Cached Prompt',
+    'chart.cacheHitRate': 'Cache Hit Rate',
+    'chart.records': 'Records',
+    'chart.total': 'Total',
+    'table.date': 'Date',
+    'table.total': 'Total',
+    'table.estimatedCost': 'Est. Cost',
+    'table.prompt': 'Prompt',
+    'table.output': 'Output',
+    'table.cachedPrompt': 'Cached Prompt',
+    'table.reasoning': 'Reasoning',
+    'table.unsplit': 'Unsplit',
+    'table.records': 'Records',
+    'empty': 'No records.',
+    'model.all': 'All models',
+    'toast.copySuccess': 'This is a static HTML report, so the browser cannot run local commands. Copied: {command}',
+    'toast.copyFallback': 'This is a static HTML report. Run this in your terminal: {command}',
+  },
+};
+const state = {
+  range: Math.min(Number(RAW.range_days || 30), 30),
+  selectedModels: new Set(),
+  lang: initialLanguage(),
+};
+
+function initialLanguage() {
+  try {
+    return localStorage.getItem(LANGUAGE_KEY) === 'en' ? 'en' : 'zh';
+  } catch {
+    return 'zh';
+  }
+}
+
+function locale() {
+  return state.lang === 'en' ? 'en-US' : 'zh-CN';
+}
+
+function t(key, params = {}) {
+  const bundle = I18N[state.lang] || I18N.zh;
+  const template = bundle[key] || I18N.zh[key] || key;
+  return template.replace(/\{(\w+)\}/g, (_, name) => params[name] == null ? '' : String(params[name]));
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = state.lang === 'en' ? 'en' : 'zh-CN';
+  document.title = t('doc.title', { days: RAW.range_days || state.range });
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    element.textContent = t(element.dataset.i18n, element.dataset);
+  });
+  document.querySelectorAll('[data-range]').forEach(button => {
+    button.textContent = t('range.days', { days: Number(button.dataset.range) });
+  });
+  const languageButton = document.getElementById('languageToggle');
+  languageButton.textContent = t('actions.lang');
+  languageButton.setAttribute('aria-label', t('actions.langAria'));
+}
+
+function applyLanguage() {
+  applyStaticTranslations();
+  renderDashboard();
+}
+
+function numberValue(row, key) {
+  return Number(row && row[key] ? row[key] : 0);
+}
+
+function fmtInt(value) {
+  return Math.round(Number(value || 0)).toLocaleString(locale());
+}
+
+function fmtMoney(value) {
+  return '$' + Number(value || 0).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function pct(numerator, denominator) {
+  return denominator > 0 ? (numerator / denominator * 100).toFixed(1) + '%' : '-';
+}
+
+function terminalLabel(row) {
+  const app = String(row.app || '').toLowerCase();
+  const source = String(row.source || '').toLowerCase();
+  const originator = String(row.originator || '').toLowerCase();
+  if (app === 'codex' && source === 'codex:vscode') {
+    return originator.includes('codex desktop') ? 'Codex Desktop' : 'VS Code';
+  }
+  if (source.includes('vscode')) return 'VS Code';
+  if (source.endsWith(':cli') || source === 'cli') return 'CLI';
+  if (source.startsWith('warp') || app === 'warp') return 'Warp';
+  if (source.startsWith('codebuddy') || app === 'codebuddy') return 'CodeBuddy';
+  if (source.startsWith('chatgpt') || app === 'chatgpt') return 'ChatGPT';
+  if (app) return row.app;
+  return row.source || 'unknown';
+}
+
+function sourceRows() {
+  const source = Array.isArray(RAW.by_source) && RAW.by_source.length ? RAW.by_source : [];
+  if (source.length) return source;
+  return (RAW.by_date || []).map(row => ({ ...row, model_label: t('model.all'), app: 'unknown', source: 'unknown' }));
+}
+
+function availableDates() {
+  return [...new Set(sourceRows().map(row => row.local_date).filter(Boolean))].sort();
+}
+
+function activeDates() {
+  const dates = availableDates();
+  const count = Math.min(state.range, dates.length);
+  return dates.slice(Math.max(0, dates.length - count));
+}
+
+function filteredRows() {
+  const dateSet = new Set(activeDates());
+  return sourceRows().filter(row => {
+    if (!dateSet.has(row.local_date)) return false;
+    if (state.selectedModels.size === 0) return true;
+    return state.selectedModels.has(row.model_label || 'Unknown');
+  });
+}
+
+function aggregate(rows, keyFn) {
+  const map = new Map();
+  rows.forEach(row => {
+    const key = keyFn(row);
+    const item = map.get(key) || {
+      key,
+      total_tokens: 0,
+      estimated_cost_usd: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      cached_input_tokens: 0,
+      reasoning_tokens: 0,
+      unsplit_tokens: 0,
+      credits: 0,
+      records: 0,
+    };
+    ['total_tokens', 'input_tokens', 'output_tokens', 'cached_input_tokens', 'reasoning_tokens', 'unsplit_tokens', 'records'].forEach(field => {
+      item[field] += numberValue(row, field);
+    });
+    item.estimated_cost_usd += numberValue(row, 'estimated_cost_usd');
+    item.credits += numberValue(row, 'credits');
+    map.set(key, item);
+  });
+  return [...map.values()];
+}
+
+function dailyRows(rows) {
+  const byDate = new Map(aggregate(rows, row => row.local_date).map(row => [row.key, row]));
+  return activeDates().map(date => ({ key: date, local_date: date, ...(byDate.get(date) || {}) }));
+}
+
+function topModels(limit = 8) {
+  return aggregate(filteredRows(), row => row.model_label || 'Unknown')
+    .sort((a, b) => b.total_tokens - a.total_tokens)
+    .slice(0, limit);
+}
+
+function allModels() {
+  return aggregate(sourceRows(), row => row.model_label || 'Unknown')
+    .filter(row => row.total_tokens > 0)
+    .sort((a, b) => b.total_tokens - a.total_tokens);
+}
+
+function totalOf(rows) {
+  return rows.reduce((acc, row) => {
+    ['total_tokens', 'input_tokens', 'output_tokens', 'cached_input_tokens', 'reasoning_tokens', 'unsplit_tokens', 'records'].forEach(field => {
+      acc[field] += numberValue(row, field);
+    });
+    acc.estimated_cost_usd += numberValue(row, 'estimated_cost_usd');
+    acc.credits += numberValue(row, 'credits');
+    return acc;
+  }, { total_tokens: 0, input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, reasoning_tokens: 0, unsplit_tokens: 0, records: 0, estimated_cost_usd: 0, credits: 0 });
+}
+
+function renderCards(rows) {
+  const totals = totalOf(rows);
+  const days = Math.max(activeDates().length, 1);
+  const items = [
+    [t('summary.totalToken'), fmtInt(totals.total_tokens), t('summary.currentRange')],
+    [t('summary.estimatedCost'), fmtMoney(totals.estimated_cost_usd), t('summary.apiPricedOnly')],
+    [t('summary.prompt'), fmtInt(totals.input_tokens), t('summary.dailyAvg', { value: fmtInt(totals.input_tokens / days) })],
+    [t('summary.output'), fmtInt(totals.output_tokens), t('summary.generatedOutput')],
+    [t('summary.cachedPrompt'), fmtInt(totals.cached_input_tokens), t('summary.cacheHitRate', { value: pct(totals.cached_input_tokens, totals.input_tokens) })],
+    [t('summary.unsplit'), fmtInt(totals.unsplit_tokens), t('summary.totalOnlyEvents')],
+  ];
+  document.getElementById('summaryCards').innerHTML = items.map(([label, value, detail]) => `
+    <article class="metric"><span>${label}</span><strong>${value}</strong><small>${detail}</small></article>
+  `).join('');
+}
+
+function renderModelChips() {
+  const models = allModels().slice(0, 12);
+  document.getElementById('modelChips').innerHTML = models.map(row => {
+    const key = row.key;
+    const active = state.selectedModels.size === 0 || state.selectedModels.has(key);
+    return `<button type="button" class="chip ${active ? 'active' : ''}" data-model="${escapeHtml(key)}">${escapeHtml(key)} · ${fmtInt(row.total_tokens)}</button>`;
+  }).join('');
+  document.getElementById('filterHint').textContent = state.selectedModels.size === 0
+    ? t('filters.hintAll', { range: state.range })
+    : t('filters.hintSelected', { count: state.selectedModels.size, range: state.range });
+}
+
+function lineChart(rows, key, options = {}) {
+  const unit = options.unit || 'tokens';
+  const color = options.color || '#1b365d';
+  const values = rows.map(row => Number(row[key] || 0));
+  const max = Math.max(...values, 0);
+  if (!rows.length || max <= 0) return `<p class="empty">${t('empty')}</p>`;
+  const w = 760, h = 280, left = 62, right = 22, top = 22, bottom = 52;
+  const cw = w - left - right, ch = h - top - bottom;
+  const points = rows.map((row, idx) => {
+    const x = left + cw * idx / Math.max(rows.length - 1, 1);
+    const y = top + ch - ch * Number(row[key] || 0) / max;
+    return [x, y, Number(row[key] || 0), row.local_date || row.key];
+  });
+  const label = options.label || key;
+  const pointText = points.map(point => `${point[0].toFixed(2)},${point[1].toFixed(2)}`).join(' ');
+  const area = `M ${left},${top + ch} L ${pointText} L ${left + cw},${top + ch} Z`;
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${key}">
+    ${grid(left, top, cw, ch, max, unit)}
+    <path class="area" d="${area}"></path>
+    <polyline class="line" style="stroke:${color}" points="${pointText}"></polyline>
+    ${points.map(point => `<circle cx="${point[0].toFixed(2)}" cy="${point[1].toFixed(2)}" r="5" fill="#faf9f5" stroke="${color}" stroke-width="3" ${tooltipAttr(`${point[3]} · ${label}: ${formatByUnit(point[2], unit)}`)}></circle>`).join('')}
+    ${axisLabels(rows, left, cw, top + ch + 26)}
+  </svg>`;
+}
+
+function barChart(rows, key, options = {}) {
+  const unit = options.unit || 'tokens';
+  const color = options.color || '#b56b35';
+  const values = rows.map(row => Number(row[key] || 0));
+  const max = Math.max(...values, 0);
+  if (!rows.length || max <= 0) return `<p class="empty">${t('empty')}</p>`;
+  const w = 760, h = 280, left = 62, right = 22, top = 22, bottom = 52;
+  const cw = w - left - right, ch = h - top - bottom;
+  const gap = 7;
+  const bw = Math.max(8, (cw - gap * Math.max(rows.length - 1, 0)) / Math.max(rows.length, 1));
+  const label = options.label || key;
+  return `<svg class="chart bars" viewBox="0 0 ${w} ${h}" role="img" aria-label="${key}">
+    ${grid(left, top, cw, ch, max, unit)}
+    ${rows.map((row, idx) => {
+      const value = Number(row[key] || 0);
+      const bh = ch * value / max;
+      const x = left + idx * (bw + gap);
+      const y = top + ch - bh;
+      return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="5" fill="${color}" ${tooltipAttr(`${row.local_date || row.key} · ${label}: ${formatByUnit(value, unit)}`)}></rect>`;
+    }).join('')}
+    ${axisLabels(rows, left, cw, top + ch + 26)}
+  </svg>`;
+}
+
+function multiLineChart(rows, series) {
+  const max = Math.max(...series.flatMap(item => rows.map(row => Number(row[item.key] || 0))), 0);
+  if (!rows.length || max <= 0) return `<p class="empty">${t('empty')}</p>`;
+  const w = 760, h = 280, left = 62, right = 22, top = 22, bottom = 62;
+  const cw = w - left - right, ch = h - top - bottom;
+  const legend = `<div class="legend">${series.map(item => `<span><i style="background:${item.color}"></i>${item.label}</span>`).join('')}</div>`;
+  const lines = series.map(item => {
+    const points = rows.map((row, idx) => {
+      const value = Number(row[item.key] || 0);
+      const x = left + cw * idx / Math.max(rows.length - 1, 1);
+      const y = top + ch - ch * value / max;
+      return [x, y, value, row.local_date || row.key];
+    });
+    return `<polyline class="multi-line" points="${points.map(point => `${point[0].toFixed(2)},${point[1].toFixed(2)}`).join(' ')}" stroke="${item.color}"></polyline>
+      ${points.map(point => `<circle cx="${point[0].toFixed(2)}" cy="${point[1].toFixed(2)}" r="4" fill="${item.color}" ${tooltipAttr(`${point[3]} · ${item.label}: ${fmtInt(point[2])}`)}></circle>`).join('')}`;
+  }).join('');
+  return `${legend}<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="multi-line">
+    ${grid(left, top, cw, ch, max, 'tokens')}
+    ${lines}
+    ${axisLabels(rows, left, cw, top + ch + 26)}
+  </svg>`;
+}
+
+function stackedModelTrend(rows, models) {
+  if (!rows.length || !models.length) return `<p class="empty">${t('empty')}</p>`;
+  const byDateModel = new Map();
+  filteredRows().forEach(row => {
+    const model = row.model_label || 'Unknown';
+    if (!models.includes(model)) return;
+    const key = `${row.local_date}||${model}`;
+    byDateModel.set(key, (byDateModel.get(key) || 0) + numberValue(row, 'total_tokens'));
+  });
+  const daily = activeDates().map(date => ({ key: date, local_date: date }));
+  const series = models.map((model, idx) => ({
+    label: model,
+    key: model,
+    color: COLORS[idx % COLORS.length],
+  }));
+  daily.forEach(row => {
+    models.forEach(model => {
+      row[model] = byDateModel.get(`${row.local_date}||${model}`) || 0;
+    });
+  });
+  return multiLineChart(daily, series);
+}
+
+function donut(rows, labelKey, valueKey) {
+  const visible = rows.filter(row => Number(row[valueKey] || 0) > 0).slice(0, 8);
+  const total = visible.reduce((sum, row) => sum + Number(row[valueKey] || 0), 0);
+  if (total <= 0) return `<p class="empty">${t('empty')}</p>`;
+  let cursor = 0;
+  const stops = visible.map((row, idx) => {
+    const pctValue = Number(row[valueKey] || 0) / total * 100;
+    const color = COLORS[idx % COLORS.length];
+    const stop = `${color} ${cursor.toFixed(4)}% ${(cursor + pctValue).toFixed(4)}%`;
+    cursor += pctValue;
+    return stop;
+  });
+  return `<div class="donut-wrap">
+    <div class="donut" style="background: conic-gradient(${stops.join(', ')});" ${tooltipAttr(`${t('chart.total')}: ${fmtInt(total)}`)}><span>${fmtInt(total)}</span></div>
+    <ul class="share-list">${visible.map((row, idx) => `<li ${tooltipAttr(`${row[labelKey] || row.key}: ${fmtInt(row[valueKey])} · ${pct(Number(row[valueKey] || 0), total)}`)}><span><i style="background:${COLORS[idx % COLORS.length]}"></i>${escapeHtml(row[labelKey] || row.key)}</span><strong>${fmtInt(row[valueKey])}</strong></li>`).join('')}</ul>
+  </div>`;
+}
+
+function rankedBars(rows, labelKey, valueKey, limit = 8) {
+  const visible = rows.filter(row => Number(row[valueKey] || 0) > 0).slice(0, limit);
+  const max = Math.max(...visible.map(row => Number(row[valueKey] || 0)), 0);
+  if (max <= 0) return `<p class="empty">${t('empty')}</p>`;
+  return `<ul class="rank-list">${visible.map((row, idx) => {
+    const width = Number(row[valueKey] || 0) / max * 100;
+    return `<li class="rank-row" ${tooltipAttr(`${row[labelKey] || row.key}: ${fmtInt(row[valueKey])}`)}><span title="${escapeHtml(row[labelKey] || row.key)}">${escapeHtml(row[labelKey] || row.key)}</span><div><i style="width:${width.toFixed(2)}%; background:${COLORS[idx % COLORS.length]}"></i></div><strong>${fmtInt(row[valueKey])}</strong></li>`;
+  }).join('')}</ul>`;
+}
+
+function dailyTable(rows) {
+  if (!rows.length) return `<p class="empty">${t('empty')}</p>`;
+  return `<div class="table-wrap"><table>
+    <thead><tr><th>${t('table.date')}</th><th>${t('table.total')}</th><th>${t('table.estimatedCost')}</th><th>${t('table.prompt')}</th><th>${t('table.output')}</th><th>${t('table.cachedPrompt')}</th><th>${t('table.reasoning')}</th><th>${t('table.unsplit')}</th><th>${t('table.records')}</th></tr></thead>
+    <tbody>${[...rows].reverse().map(row => `<tr>
+      <td>${escapeHtml(row.local_date || row.key)}</td>
+      <td>${fmtInt(row.total_tokens)}</td>
+      <td>${fmtMoney(row.estimated_cost_usd)}</td>
+      <td>${fmtInt(row.input_tokens)}</td>
+      <td>${fmtInt(row.output_tokens)}</td>
+      <td>${fmtInt(row.cached_input_tokens)}</td>
+      <td>${fmtInt(row.reasoning_tokens)}</td>
+      <td>${fmtInt(row.unsplit_tokens)}</td>
+      <td>${fmtInt(row.records)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function grid(left, top, width, height, max, unit) {
+  return [0, 1, 2, 3].map(idx => {
+    const ratio = idx / 3;
+    const y = top + height - height * ratio;
+    return `<line class="grid" x1="${left}" y1="${y.toFixed(2)}" x2="${left + width}" y2="${y.toFixed(2)}"></line>
+      <text class="axis-value" x="${left - 10}" y="${(y + 4).toFixed(2)}" text-anchor="end">${axisValue(max * ratio, unit)}</text>`;
+  }).join('');
+}
+
+function axisLabels(rows, left, width, y) {
+  const indexes = new Set([0, rows.length - 1]);
+  if (rows.length > 4) indexes.add(Math.floor(rows.length / 2));
+  else if (rows.length > 2) indexes.add(1);
+  return [...indexes].sort((a, b) => a - b).map(idx => {
+    const x = left + width * idx / Math.max(rows.length - 1, 1);
+    return `<text class="axis-label" x="${x.toFixed(2)}" y="${y}" text-anchor="middle">${escapeHtml(rows[idx].local_date || rows[idx].key)}</text>`;
+  }).join('');
+}
+
+function axisValue(value, unit) {
+  if (unit === '$') return value >= 10 ? '$' + value.toFixed(0) : '$' + value.toFixed(1);
+  if (unit === '%') return value.toFixed(0) + '%';
+  if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B';
+  if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+  if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
+  return value.toFixed(0);
+}
+
+function formatByUnit(value, unit) {
+  if (unit === '%') return value.toFixed(1) + '%';
+  return unit === '$' ? fmtMoney(value) : fmtInt(value);
+}
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function tooltipAttr(value) {
+  return `data-tooltip="${escapeHtml(value)}"`;
+}
+
+function renderDashboard() {
+  const rows = filteredRows();
+  const daily = dailyRows(rows);
+  const models = topModels(8);
+  const terminals = aggregate(rows, terminalLabel).sort((a, b) => b.total_tokens - a.total_tokens);
+  const apps = aggregate(rows, row => row.app || 'unknown').sort((a, b) => b.total_tokens - a.total_tokens);
+  const modelNames = models.slice(0, Math.min(5, models.length)).map(row => row.key);
+
+  renderCards(rows);
+  renderModelChips();
+  document.getElementById('totalTrend').innerHTML = lineChart(daily, 'total_tokens', { unit: 'tokens', color: '#1b365d', label: t('chart.totalToken') });
+  document.getElementById('costTrend').innerHTML = barChart(daily, 'estimated_cost_usd', { unit: '$', color: '#b56b35', label: t('chart.estimatedCost') });
+  document.getElementById('promptTrend').innerHTML = multiLineChart(daily, [
+    { label: t('summary.prompt'), key: 'input_tokens', color: '#1b365d' },
+    { label: t('summary.cachedPrompt'), key: 'cached_input_tokens', color: '#2f6f55' },
+    { label: t('summary.output'), key: 'output_tokens', color: '#b56b35' },
+  ]);
+  const cacheRows = daily.map(row => ({ ...row, cache_rate: row.input_tokens ? row.cached_input_tokens / row.input_tokens * 100 : 0 }));
+  document.getElementById('cacheTrend').innerHTML = lineChart(cacheRows, 'cache_rate', { unit: '%', color: '#2f6f55', label: t('chart.cacheHitRate') });
+  document.getElementById('modelRank').innerHTML = rankedBars(models, 'key', 'total_tokens', 8);
+  document.getElementById('modelTrend').innerHTML = stackedModelTrend(daily, modelNames);
+  document.getElementById('terminalShare').innerHTML = donut(terminals, 'key', 'total_tokens');
+  document.getElementById('appRank').innerHTML = rankedBars(apps, 'key', 'total_tokens', 8);
+  document.getElementById('recordTrend').innerHTML = barChart(daily, 'records', { unit: 'tokens', color: '#a38635', label: t('chart.records') });
+  document.getElementById('unsplitTrend').innerHTML = lineChart(daily, 'unsplit_tokens', { unit: 'tokens', color: '#9b5864', label: 'Unsplit' });
+  document.getElementById('dailyTable').innerHTML = dailyTable(daily);
+}
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('visible');
+  window.clearTimeout(showToast.timer);
+  showToast.timer = window.setTimeout(() => toast.classList.remove('visible'), 4200);
+}
+
+let chartTooltipPinned = false;
+
+function getTooltipTarget(event) {
+  return event.target instanceof Element ? event.target.closest('[data-tooltip]') : null;
+}
+
+function positionChartTooltip(event) {
+  const tooltip = document.getElementById('chartTooltip');
+  const x = Math.min(Math.max(event.clientX, 18), window.innerWidth - 18);
+  const y = Math.min(Math.max(event.clientY, 76), window.innerHeight - 18);
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top = `${y}px`;
+}
+
+function showChartTooltip(target, event, pinned = false) {
+  const tooltip = document.getElementById('chartTooltip');
+  tooltip.textContent = target.dataset.tooltip || '';
+  positionChartTooltip(event);
+  tooltip.classList.add('visible');
+  chartTooltipPinned = pinned;
+}
+
+function hideChartTooltip() {
+  const tooltip = document.getElementById('chartTooltip');
+  tooltip.classList.remove('visible');
+  chartTooltipPinned = false;
+}
+
+document.addEventListener('pointermove', event => {
+  if (chartTooltipPinned) return;
+  const target = getTooltipTarget(event);
+  if (target) showChartTooltip(target, event, false);
+});
+
+document.addEventListener('pointerout', event => {
+  if (chartTooltipPinned) return;
+  if (getTooltipTarget(event)) hideChartTooltip();
+});
+
+window.addEventListener('scroll', () => {
+  if (!chartTooltipPinned) hideChartTooltip();
+}, { passive: true });
+
+document.addEventListener('click', event => {
+  const tooltipTarget = getTooltipTarget(event);
+  if (tooltipTarget) {
+    const tooltip = document.getElementById('chartTooltip');
+    const sameTarget = tooltip.classList.contains('visible') && tooltip.textContent === (tooltipTarget.dataset.tooltip || '');
+    if (chartTooltipPinned && sameTarget) hideChartTooltip();
+    else showChartTooltip(tooltipTarget, event, true);
+    event.stopPropagation();
+    return;
+  }
+  if (chartTooltipPinned) hideChartTooltip();
+
+  const languageButton = event.target.closest('#languageToggle');
+  if (languageButton) {
+    state.lang = state.lang === 'en' ? 'zh' : 'en';
+    try {
+      localStorage.setItem(LANGUAGE_KEY, state.lang);
+    } catch {}
+    applyLanguage();
+    return;
+  }
+
+  const rangeButton = event.target.closest('[data-range]');
+  if (rangeButton) {
+    state.range = Number(rangeButton.dataset.range);
+    document.querySelectorAll('.range-button').forEach(button => button.classList.toggle('active', button === rangeButton));
+    renderDashboard();
+    return;
+  }
+  const chip = event.target.closest('[data-model]');
+  if (chip) {
+    const model = chip.dataset.model;
+    if (state.selectedModels.size === 0) {
+      allModels().slice(0, 12).forEach(row => state.selectedModels.add(row.key));
+    }
+    if (state.selectedModels.has(model)) state.selectedModels.delete(model);
+    else state.selectedModels.add(model);
+    if (state.selectedModels.size === allModels().slice(0, 12).length) state.selectedModels.clear();
+    renderDashboard();
+  }
+});
+
+document.getElementById('selectCoreModels').addEventListener('click', () => {
+  state.selectedModels = new Set(allModels().slice(0, 4).map(row => row.key));
+  renderDashboard();
+});
+
+document.getElementById('selectAllModels').addEventListener('click', () => {
+  state.selectedModels.clear();
+  renderDashboard();
+});
+
+document.getElementById('rescanButton').addEventListener('click', async () => {
+  const command = window.TOKKIT_SCAN_COMMAND || 'tok scan all && tok html month open';
+  try {
+    await navigator.clipboard.writeText(command);
+    showToast(t('toast.copySuccess', { command }));
+  } catch {
+    showToast(t('toast.copyFallback', { command }));
+  }
+});
+
+applyLanguage();
+</script>
+</body>
+</html>
