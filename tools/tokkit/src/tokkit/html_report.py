@@ -97,7 +97,8 @@ def _topbar(days: int) -> str:
     </div>
   </div>
 </header>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>"""
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="chart-tooltip" id="chartTooltip" role="status" aria-live="polite"></div>"""
 
 
 def _hero(title: str, generated_at: str, timezone_name: str) -> str:
@@ -253,6 +254,32 @@ body {
 .toast.visible {
   opacity: 1;
   transform: translateY(0);
+}
+.chart-tooltip {
+  position: fixed;
+  z-index: 40;
+  max-width: min(320px, calc(100% - 28px));
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--ivory);
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(20, 20, 19, 0.18);
+  opacity: 0;
+  transform: translate(-50%, calc(-100% - 12px));
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.chart-tooltip.visible {
+  opacity: 1;
+}
+[data-tooltip] {
+  cursor: crosshair;
+}
+[data-tooltip]:hover {
+  filter: brightness(1.08);
 }
 .report-shell {
   width: min(1220px, calc(100% - 28px));
@@ -748,13 +775,14 @@ function lineChart(rows, key, options = {}) {
     const y = top + ch - ch * Number(row[key] || 0) / max;
     return [x, y, Number(row[key] || 0), row.local_date || row.key];
   });
+  const label = options.label || key;
   const pointText = points.map(point => `${point[0].toFixed(2)},${point[1].toFixed(2)}`).join(' ');
   const area = `M ${left},${top + ch} L ${pointText} L ${left + cw},${top + ch} Z`;
   return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${key}">
     ${grid(left, top, cw, ch, max, unit)}
     <path class="area" d="${area}"></path>
     <polyline class="line" style="stroke:${color}" points="${pointText}"></polyline>
-    ${points.map(point => `<circle cx="${point[0].toFixed(2)}" cy="${point[1].toFixed(2)}" r="4" fill="#faf9f5" stroke="${color}" stroke-width="3"><title>${point[3]}: ${formatByUnit(point[2], unit)}</title></circle>`).join('')}
+    ${points.map(point => `<circle cx="${point[0].toFixed(2)}" cy="${point[1].toFixed(2)}" r="5" fill="#faf9f5" stroke="${color}" stroke-width="3" ${tooltipAttr(`${point[3]} · ${label}: ${formatByUnit(point[2], unit)}`)}></circle>`).join('')}
     ${axisLabels(rows, left, cw, top + ch + 26)}
   </svg>`;
 }
@@ -769,6 +797,7 @@ function barChart(rows, key, options = {}) {
   const cw = w - left - right, ch = h - top - bottom;
   const gap = 7;
   const bw = Math.max(8, (cw - gap * Math.max(rows.length - 1, 0)) / Math.max(rows.length, 1));
+  const label = options.label || key;
   return `<svg class="chart bars" viewBox="0 0 ${w} ${h}" role="img" aria-label="${key}">
     ${grid(left, top, cw, ch, max, unit)}
     ${rows.map((row, idx) => {
@@ -776,7 +805,7 @@ function barChart(rows, key, options = {}) {
       const bh = ch * value / max;
       const x = left + idx * (bw + gap);
       const y = top + ch - bh;
-      return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="5" fill="${color}"><title>${row.local_date || row.key}: ${formatByUnit(value, unit)}</title></rect>`;
+      return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="5" fill="${color}" ${tooltipAttr(`${row.local_date || row.key} · ${label}: ${formatByUnit(value, unit)}`)}></rect>`;
     }).join('')}
     ${axisLabels(rows, left, cw, top + ch + 26)}
   </svg>`;
@@ -796,7 +825,7 @@ function multiLineChart(rows, series) {
       return [x, y, value, row.local_date || row.key];
     });
     return `<polyline class="multi-line" points="${points.map(point => `${point[0].toFixed(2)},${point[1].toFixed(2)}`).join(' ')}" stroke="${item.color}"></polyline>
-      ${points.map(point => `<circle cx="${point[0].toFixed(2)}" cy="${point[1].toFixed(2)}" r="3" fill="${item.color}"><title>${item.label} · ${point[3]}: ${fmtInt(point[2])}</title></circle>`).join('')}`;
+      ${points.map(point => `<circle cx="${point[0].toFixed(2)}" cy="${point[1].toFixed(2)}" r="4" fill="${item.color}" ${tooltipAttr(`${point[3]} · ${item.label}: ${fmtInt(point[2])}`)}></circle>`).join('')}`;
   }).join('');
   return `${legend}<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="multi-line">
     ${grid(left, top, cw, ch, max, 'tokens')}
@@ -841,8 +870,8 @@ function donut(rows, labelKey, valueKey) {
     return stop;
   });
   return `<div class="donut-wrap">
-    <div class="donut" style="background: conic-gradient(${stops.join(', ')});"><span>${fmtInt(total)}</span></div>
-    <ul class="share-list">${visible.map((row, idx) => `<li><span><i style="background:${COLORS[idx % COLORS.length]}"></i>${escapeHtml(row[labelKey] || row.key)}</span><strong>${fmtInt(row[valueKey])}</strong></li>`).join('')}</ul>
+    <div class="donut" style="background: conic-gradient(${stops.join(', ')});" ${tooltipAttr(`总量: ${fmtInt(total)}`)}><span>${fmtInt(total)}</span></div>
+    <ul class="share-list">${visible.map((row, idx) => `<li ${tooltipAttr(`${row[labelKey] || row.key}: ${fmtInt(row[valueKey])} · ${pct(Number(row[valueKey] || 0), total)}`)}><span><i style="background:${COLORS[idx % COLORS.length]}"></i>${escapeHtml(row[labelKey] || row.key)}</span><strong>${fmtInt(row[valueKey])}</strong></li>`).join('')}</ul>
   </div>`;
 }
 
@@ -852,7 +881,7 @@ function rankedBars(rows, labelKey, valueKey, limit = 8) {
   if (max <= 0) return '<p class="empty">暂无记录。</p>';
   return `<ul class="rank-list">${visible.map((row, idx) => {
     const width = Number(row[valueKey] || 0) / max * 100;
-    return `<li class="rank-row"><span title="${escapeHtml(row[labelKey] || row.key)}">${escapeHtml(row[labelKey] || row.key)}</span><div><i style="width:${width.toFixed(2)}%; background:${COLORS[idx % COLORS.length]}"></i></div><strong>${fmtInt(row[valueKey])}</strong></li>`;
+    return `<li class="rank-row" ${tooltipAttr(`${row[labelKey] || row.key}: ${fmtInt(row[valueKey])}`)}><span title="${escapeHtml(row[labelKey] || row.key)}">${escapeHtml(row[labelKey] || row.key)}</span><div><i style="width:${width.toFixed(2)}%; background:${COLORS[idx % COLORS.length]}"></i></div><strong>${fmtInt(row[valueKey])}</strong></li>`;
   }).join('')}</ul>`;
 }
 
@@ -916,6 +945,10 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function tooltipAttr(value) {
+  return `data-tooltip="${escapeHtml(value)}"`;
+}
+
 function renderDashboard() {
   const rows = filteredRows();
   const daily = dailyRows(rows);
@@ -926,21 +959,21 @@ function renderDashboard() {
 
   renderCards(rows);
   renderModelChips();
-  document.getElementById('totalTrend').innerHTML = lineChart(daily, 'total_tokens', { unit: 'tokens', color: '#1b365d' });
-  document.getElementById('costTrend').innerHTML = barChart(daily, 'estimated_cost_usd', { unit: '$', color: '#b56b35' });
+  document.getElementById('totalTrend').innerHTML = lineChart(daily, 'total_tokens', { unit: 'tokens', color: '#1b365d', label: '总 Token' });
+  document.getElementById('costTrend').innerHTML = barChart(daily, 'estimated_cost_usd', { unit: '$', color: '#b56b35', label: '预估费用' });
   document.getElementById('promptTrend').innerHTML = multiLineChart(daily, [
     { label: 'Prompt', key: 'input_tokens', color: '#1b365d' },
     { label: '缓存 Prompt', key: 'cached_input_tokens', color: '#2f6f55' },
     { label: 'Output', key: 'output_tokens', color: '#b56b35' },
   ]);
   const cacheRows = daily.map(row => ({ ...row, cache_rate: row.input_tokens ? row.cached_input_tokens / row.input_tokens * 100 : 0 }));
-  document.getElementById('cacheTrend').innerHTML = lineChart(cacheRows, 'cache_rate', { unit: '%', color: '#2f6f55' });
+  document.getElementById('cacheTrend').innerHTML = lineChart(cacheRows, 'cache_rate', { unit: '%', color: '#2f6f55', label: '缓存命中率' });
   document.getElementById('modelRank').innerHTML = rankedBars(models, 'key', 'total_tokens', 8);
   document.getElementById('modelTrend').innerHTML = stackedModelTrend(daily, modelNames);
   document.getElementById('terminalShare').innerHTML = donut(terminals, 'key', 'total_tokens');
   document.getElementById('appRank').innerHTML = rankedBars(apps, 'key', 'total_tokens', 8);
-  document.getElementById('recordTrend').innerHTML = barChart(daily, 'records', { unit: 'tokens', color: '#a38635' });
-  document.getElementById('unsplitTrend').innerHTML = lineChart(daily, 'unsplit_tokens', { unit: 'tokens', color: '#9b5864' });
+  document.getElementById('recordTrend').innerHTML = barChart(daily, 'records', { unit: 'tokens', color: '#a38635', label: '记录数' });
+  document.getElementById('unsplitTrend').innerHTML = lineChart(daily, 'unsplit_tokens', { unit: 'tokens', color: '#9b5864', label: 'Unsplit' });
   document.getElementById('dailyTable').innerHTML = dailyTable(daily);
 }
 
@@ -952,7 +985,61 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove('visible'), 4200);
 }
 
+let chartTooltipPinned = false;
+
+function getTooltipTarget(event) {
+  return event.target instanceof Element ? event.target.closest('[data-tooltip]') : null;
+}
+
+function positionChartTooltip(event) {
+  const tooltip = document.getElementById('chartTooltip');
+  const x = Math.min(Math.max(event.clientX, 18), window.innerWidth - 18);
+  const y = Math.min(Math.max(event.clientY, 76), window.innerHeight - 18);
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top = `${y}px`;
+}
+
+function showChartTooltip(target, event, pinned = false) {
+  const tooltip = document.getElementById('chartTooltip');
+  tooltip.textContent = target.dataset.tooltip || '';
+  positionChartTooltip(event);
+  tooltip.classList.add('visible');
+  chartTooltipPinned = pinned;
+}
+
+function hideChartTooltip() {
+  const tooltip = document.getElementById('chartTooltip');
+  tooltip.classList.remove('visible');
+  chartTooltipPinned = false;
+}
+
+document.addEventListener('pointermove', event => {
+  if (chartTooltipPinned) return;
+  const target = getTooltipTarget(event);
+  if (target) showChartTooltip(target, event, false);
+});
+
+document.addEventListener('pointerout', event => {
+  if (chartTooltipPinned) return;
+  if (getTooltipTarget(event)) hideChartTooltip();
+});
+
+window.addEventListener('scroll', () => {
+  if (!chartTooltipPinned) hideChartTooltip();
+}, { passive: true });
+
 document.addEventListener('click', event => {
+  const tooltipTarget = getTooltipTarget(event);
+  if (tooltipTarget) {
+    const tooltip = document.getElementById('chartTooltip');
+    const sameTarget = tooltip.classList.contains('visible') && tooltip.textContent === (tooltipTarget.dataset.tooltip || '');
+    if (chartTooltipPinned && sameTarget) hideChartTooltip();
+    else showChartTooltip(tooltipTarget, event, true);
+    event.stopPropagation();
+    return;
+  }
+  if (chartTooltipPinned) hideChartTooltip();
+
   const rangeButton = event.target.closest('[data-range]');
   if (rangeButton) {
     state.range = Number(rangeButton.dataset.range);
