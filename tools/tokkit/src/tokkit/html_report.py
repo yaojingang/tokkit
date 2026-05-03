@@ -29,39 +29,39 @@ def render_range_html_report(
             "<body>",
             _topbar(days),
             '<main class="report-shell">',
-            _hero(title, generated_at, timezone_name),
+            _hero(title, generated_at, timezone_name, days),
             '<section id="overview" class="anchor-section">',
             '<div id="summaryCards" class="metrics"></div>',
             "</section>",
             '<section id="filters" class="anchor-section panel control-panel">',
-            "<h2>筛选</h2>",
+            '<h2 data-i18n="filters.title">筛选</h2>',
             '<div class="filter-row">',
-            '<div><span class="control-label">模型范围</span><div id="modelChips" class="chips"></div></div>',
+            '<div><span class="control-label" data-i18n="filters.modelRange">模型范围</span><div id="modelChips" class="chips"></div></div>',
             '<div class="filter-actions">',
-            '<button type="button" class="ghost-button" id="selectCoreModels">只看核心模型</button>',
-            '<button type="button" class="ghost-button" id="selectAllModels">全部模型</button>',
+            '<button type="button" class="ghost-button" id="selectCoreModels" data-i18n="filters.core">只看核心模型</button>',
+            '<button type="button" class="ghost-button" id="selectAllModels" data-i18n="filters.all">全部模型</button>',
             "</div>",
             "</div>",
             '<p class="hint" id="filterHint"></p>',
             "</section>",
             '<section id="trend" class="anchor-section chart-grid">',
-            _panel("每日 Token 趋势", '<div id="totalTrend"></div>'),
-            _panel("预估费用趋势", '<div id="costTrend"></div>'),
-            _panel("Prompt / Output / 缓存趋势", '<div id="promptTrend"></div>'),
-            _panel("缓存命中率趋势", '<div id="cacheTrend"></div>'),
+            _panel("每日 Token 趋势", '<div id="totalTrend"></div>', "panel.totalTrend"),
+            _panel("预估费用趋势", '<div id="costTrend"></div>', "panel.costTrend"),
+            _panel("Prompt / Output / 缓存趋势", '<div id="promptTrend"></div>', "panel.promptTrend"),
+            _panel("缓存命中率趋势", '<div id="cacheTrend"></div>', "panel.cacheTrend"),
             "</section>",
             '<section id="models" class="anchor-section wide-grid">',
-            _panel("模型消耗排行", '<div id="modelRank"></div>'),
-            _panel("核心模型每日消耗", '<div id="modelTrend"></div>'),
+            _panel("模型消耗排行", '<div id="modelRank"></div>', "panel.modelRank"),
+            _panel("核心模型每日消耗", '<div id="modelTrend"></div>', "panel.modelTrend"),
             "</section>",
             '<section id="terminals" class="anchor-section chart-grid">',
-            _panel("终端占比", '<div id="terminalShare"></div>'),
-            _panel("应用维度", '<div id="appRank"></div>'),
-            _panel("记录数趋势", '<div id="recordTrend"></div>'),
-            _panel("Unsplit 趋势", '<div id="unsplitTrend"></div>'),
+            _panel("终端占比", '<div id="terminalShare"></div>', "panel.terminalShare"),
+            _panel("应用维度", '<div id="appRank"></div>', "panel.appRank"),
+            _panel("记录数趋势", '<div id="recordTrend"></div>', "panel.recordTrend"),
+            _panel("Unsplit 趋势", '<div id="unsplitTrend"></div>', "panel.unsplitTrend"),
             "</section>",
             '<section id="details" class="anchor-section wide-panel panel">',
-            "<h2>每日明细</h2>",
+            '<h2 data-i18n="panel.details">每日明细</h2>',
             '<div id="dailyTable"></div>',
             "</section>",
             "</main>",
@@ -84,16 +84,17 @@ def _topbar(days: int) -> str:
   <div class="topbar-inner">
     <a class="brand" href="#overview" aria-label="TokKit 报告首页">TokKit</a>
     <nav class="nav-links" aria-label="报告模块">
-      <a href="#overview">总览</a>
-      <a href="#filters">筛选</a>
-      <a href="#trend">趋势</a>
-      <a href="#models">模型</a>
-      <a href="#terminals">终端</a>
-      <a href="#details">明细</a>
+      <a href="#overview" data-i18n="nav.overview">总览</a>
+      <a href="#filters" data-i18n="nav.filters">筛选</a>
+      <a href="#trend" data-i18n="nav.trend">趋势</a>
+      <a href="#models" data-i18n="nav.models">模型</a>
+      <a href="#terminals" data-i18n="nav.terminals">终端</a>
+      <a href="#details" data-i18n="nav.details">明细</a>
     </nav>
     <div class="top-actions">
       <div class="range-group" aria-label="时间范围">{"".join(range_buttons)}</div>
-      <button type="button" class="scan-button" id="rescanButton">重新扫描</button>
+      <button type="button" class="scan-button" id="rescanButton" data-i18n="actions.rescan">重新扫描</button>
+      <button type="button" class="lang-button" id="languageToggle" aria-label="Switch to English">EN</button>
     </div>
   </div>
 </header>
@@ -101,26 +102,26 @@ def _topbar(days: int) -> str:
 <div class="chart-tooltip" id="chartTooltip" role="status" aria-live="polite"></div>"""
 
 
-def _hero(title: str, generated_at: str, timezone_name: str) -> str:
+def _hero(title: str, generated_at: str, timezone_name: str, days: int) -> str:
     return f"""
 <section class="hero">
   <div>
-    <p class="eyebrow">本地 AI Token 账本</p>
-    <h1>{escape(title)}</h1>
-    <p class="subtle">生成时间 {escape(generated_at)} · 时区 {escape(timezone_name)}</p>
+    <p class="eyebrow" data-i18n="hero.eyebrow">本地 AI Token 账本</p>
+    <h1 data-i18n="hero.title" data-days="{days}">{escape(title)}</h1>
+    <p class="subtle" data-i18n="hero.meta" data-generated="{escape(generated_at)}" data-timezone="{escape(timezone_name)}">生成时间 {escape(generated_at)} · 时区 {escape(timezone_name)}</p>
   </div>
   <div class="hero-note">
-    <span>交互视图</span>
-    <strong>趋势 · 模型 · 终端</strong>
-    <small>切换天数和模型筛选后，所有图表会同步重算。</small>
+    <span data-i18n="hero.noteLabel">交互视图</span>
+    <strong data-i18n="hero.noteTitle">趋势 · 模型 · 终端</strong>
+    <small data-i18n="hero.noteBody">切换天数和模型筛选后，所有图表会同步重算。</small>
   </div>
 </section>"""
 
 
-def _panel(title: str, body: str) -> str:
+def _panel(title: str, body: str, i18n_key: str) -> str:
     return f"""
 <section class="panel">
-  <h2>{escape(title)}</h2>
+  <h2 data-i18n="{escape(i18n_key)}">{escape(title)}</h2>
   {body}
 </section>"""
 
@@ -189,7 +190,8 @@ body {
 .nav-links a,
 .range-button,
 .ghost-button,
-.scan-button {
+.scan-button,
+.lang-button {
   min-height: 34px;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -235,6 +237,17 @@ body {
   color: var(--ivory);
   padding: 7px 13px;
   cursor: pointer;
+}
+.lang-button {
+  min-width: 44px;
+  background: var(--ivory);
+  border-color: var(--ring);
+  color: var(--brand);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.lang-button:hover {
+  background: var(--brand-soft);
 }
 .toast {
   position: fixed;
@@ -621,21 +634,196 @@ def _js() -> str:
     return r"""
 const RAW = JSON.parse(document.getElementById('tokkit-data').textContent);
 const COLORS = ['#1b365d', '#b56b35', '#2f6f55', '#a38635', '#9b5864', '#596f83', '#6d6250', '#707a3f'];
+const LANGUAGE_KEY = 'tokkit.report.language';
+const I18N = {
+  zh: {
+    'doc.title': 'TokKit 用量报告 - 最近 {days} 天',
+    'nav.overview': '总览',
+    'nav.filters': '筛选',
+    'nav.trend': '趋势',
+    'nav.models': '模型',
+    'nav.terminals': '终端',
+    'nav.details': '明细',
+    'actions.rescan': '重新扫描',
+    'actions.lang': 'EN',
+    'actions.langAria': '切换到英文',
+    'range.days': '{days} 天',
+    'hero.eyebrow': '本地 AI Token 账本',
+    'hero.title': 'TokKit 用量报告 - 最近 {days} 天',
+    'hero.meta': '生成时间 {generated} · 时区 {timezone}',
+    'hero.noteLabel': '交互视图',
+    'hero.noteTitle': '趋势 · 模型 · 终端',
+    'hero.noteBody': '切换天数和模型筛选后，所有图表会同步重算。',
+    'filters.title': '筛选',
+    'filters.modelRange': '模型范围',
+    'filters.core': '只看核心模型',
+    'filters.all': '全部模型',
+    'filters.hintAll': '当前显示全部模型。时间范围：最近 {range} 天。',
+    'filters.hintSelected': '当前显示 {count} 个模型。时间范围：最近 {range} 天。',
+    'panel.totalTrend': '每日 Token 趋势',
+    'panel.costTrend': '预估费用趋势',
+    'panel.promptTrend': 'Prompt / Output / 缓存趋势',
+    'panel.cacheTrend': '缓存命中率趋势',
+    'panel.modelRank': '模型消耗排行',
+    'panel.modelTrend': '核心模型每日消耗',
+    'panel.terminalShare': '终端占比',
+    'panel.appRank': '应用维度',
+    'panel.recordTrend': '记录数趋势',
+    'panel.unsplitTrend': 'Unsplit 趋势',
+    'panel.details': '每日明细',
+    'summary.totalToken': '总 Token',
+    'summary.currentRange': '当前筛选范围',
+    'summary.estimatedCost': '预估费用',
+    'summary.apiPricedOnly': '仅 API 可估价记录',
+    'summary.dailyAvg': '日均 {value}',
+    'summary.prompt': 'Prompt',
+    'summary.output': 'Output',
+    'summary.generatedOutput': '生成输出',
+    'summary.cachedPrompt': '缓存 Prompt',
+    'summary.cacheHitRate': '命中率 {value}',
+    'summary.unsplit': 'Unsplit',
+    'summary.totalOnlyEvents': 'total-only 事件',
+    'chart.totalToken': '总 Token',
+    'chart.estimatedCost': '预估费用',
+    'chart.cachedPrompt': '缓存 Prompt',
+    'chart.cacheHitRate': '缓存命中率',
+    'chart.records': '记录数',
+    'chart.total': '总量',
+    'table.date': '日期',
+    'table.total': '总量',
+    'table.estimatedCost': '预估费用',
+    'table.prompt': 'Prompt',
+    'table.output': 'Output',
+    'table.cachedPrompt': '缓存 Prompt',
+    'table.reasoning': 'Reasoning',
+    'table.unsplit': 'Unsplit',
+    'table.records': '记录',
+    'empty': '暂无记录。',
+    'model.all': '全部模型',
+    'toast.copySuccess': '当前是静态 HTML，浏览器不能直接执行本地命令。已复制：{command}',
+    'toast.copyFallback': '当前是静态 HTML，请在终端执行：{command}',
+  },
+  en: {
+    'doc.title': 'TokKit Usage Report - Last {days} Days',
+    'nav.overview': 'Overview',
+    'nav.filters': 'Filters',
+    'nav.trend': 'Trends',
+    'nav.models': 'Models',
+    'nav.terminals': 'Terminals',
+    'nav.details': 'Details',
+    'actions.rescan': 'Rescan',
+    'actions.lang': '中文',
+    'actions.langAria': 'Switch to Simplified Chinese',
+    'range.days': '{days} days',
+    'hero.eyebrow': 'Local AI Token Ledger',
+    'hero.title': 'TokKit Usage Report - Last {days} Days',
+    'hero.meta': 'Generated {generated} · Time zone {timezone}',
+    'hero.noteLabel': 'Interactive view',
+    'hero.noteTitle': 'Trends · Models · Terminals',
+    'hero.noteBody': 'Charts update together when you change the range or model filters.',
+    'filters.title': 'Filters',
+    'filters.modelRange': 'Model scope',
+    'filters.core': 'Core models only',
+    'filters.all': 'All models',
+    'filters.hintAll': 'Showing all models. Range: last {range} days.',
+    'filters.hintSelected': 'Showing {count} models. Range: last {range} days.',
+    'panel.totalTrend': 'Daily Token Trend',
+    'panel.costTrend': 'Estimated Cost Trend',
+    'panel.promptTrend': 'Prompt / Output / Cached Trend',
+    'panel.cacheTrend': 'Cache Hit Rate Trend',
+    'panel.modelRank': 'Model Usage Ranking',
+    'panel.modelTrend': 'Core Model Daily Usage',
+    'panel.terminalShare': 'Terminal Share',
+    'panel.appRank': 'Application Breakdown',
+    'panel.recordTrend': 'Record Count Trend',
+    'panel.unsplitTrend': 'Unsplit Trend',
+    'panel.details': 'Daily Details',
+    'summary.totalToken': 'Total Tokens',
+    'summary.currentRange': 'Current filter range',
+    'summary.estimatedCost': 'Estimated Cost',
+    'summary.apiPricedOnly': 'Priced API records only',
+    'summary.dailyAvg': 'Daily avg {value}',
+    'summary.prompt': 'Prompt',
+    'summary.output': 'Output',
+    'summary.generatedOutput': 'Generated output',
+    'summary.cachedPrompt': 'Cached Prompt',
+    'summary.cacheHitRate': 'Hit rate {value}',
+    'summary.unsplit': 'Unsplit',
+    'summary.totalOnlyEvents': 'total-only events',
+    'chart.totalToken': 'Total Tokens',
+    'chart.estimatedCost': 'Estimated Cost',
+    'chart.cachedPrompt': 'Cached Prompt',
+    'chart.cacheHitRate': 'Cache Hit Rate',
+    'chart.records': 'Records',
+    'chart.total': 'Total',
+    'table.date': 'Date',
+    'table.total': 'Total',
+    'table.estimatedCost': 'Est. Cost',
+    'table.prompt': 'Prompt',
+    'table.output': 'Output',
+    'table.cachedPrompt': 'Cached Prompt',
+    'table.reasoning': 'Reasoning',
+    'table.unsplit': 'Unsplit',
+    'table.records': 'Records',
+    'empty': 'No records.',
+    'model.all': 'All models',
+    'toast.copySuccess': 'This is a static HTML report, so the browser cannot run local commands. Copied: {command}',
+    'toast.copyFallback': 'This is a static HTML report. Run this in your terminal: {command}',
+  },
+};
 const state = {
   range: Math.min(Number(RAW.range_days || 30), 30),
   selectedModels: new Set(),
+  lang: initialLanguage(),
 };
+
+function initialLanguage() {
+  try {
+    return localStorage.getItem(LANGUAGE_KEY) === 'en' ? 'en' : 'zh';
+  } catch {
+    return 'zh';
+  }
+}
+
+function locale() {
+  return state.lang === 'en' ? 'en-US' : 'zh-CN';
+}
+
+function t(key, params = {}) {
+  const bundle = I18N[state.lang] || I18N.zh;
+  const template = bundle[key] || I18N.zh[key] || key;
+  return template.replace(/\{(\w+)\}/g, (_, name) => params[name] == null ? '' : String(params[name]));
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = state.lang === 'en' ? 'en' : 'zh-CN';
+  document.title = t('doc.title', { days: RAW.range_days || state.range });
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    element.textContent = t(element.dataset.i18n, element.dataset);
+  });
+  document.querySelectorAll('[data-range]').forEach(button => {
+    button.textContent = t('range.days', { days: Number(button.dataset.range) });
+  });
+  const languageButton = document.getElementById('languageToggle');
+  languageButton.textContent = t('actions.lang');
+  languageButton.setAttribute('aria-label', t('actions.langAria'));
+}
+
+function applyLanguage() {
+  applyStaticTranslations();
+  renderDashboard();
+}
 
 function numberValue(row, key) {
   return Number(row && row[key] ? row[key] : 0);
 }
 
 function fmtInt(value) {
-  return Math.round(Number(value || 0)).toLocaleString('zh-CN');
+  return Math.round(Number(value || 0)).toLocaleString(locale());
 }
 
 function fmtMoney(value) {
-  return '$' + Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '$' + Number(value || 0).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function pct(numerator, denominator) {
@@ -661,7 +849,7 @@ function terminalLabel(row) {
 function sourceRows() {
   const source = Array.isArray(RAW.by_source) && RAW.by_source.length ? RAW.by_source : [];
   if (source.length) return source;
-  return (RAW.by_date || []).map(row => ({ ...row, model_label: '全部模型', app: 'unknown', source: 'unknown' }));
+  return (RAW.by_date || []).map(row => ({ ...row, model_label: t('model.all'), app: 'unknown', source: 'unknown' }));
 }
 
 function availableDates() {
@@ -741,12 +929,12 @@ function renderCards(rows) {
   const totals = totalOf(rows);
   const days = Math.max(activeDates().length, 1);
   const items = [
-    ['总 Token', fmtInt(totals.total_tokens), '当前筛选范围'],
-    ['预估费用', fmtMoney(totals.estimated_cost_usd), '仅 API 可估价记录'],
-    ['Prompt', fmtInt(totals.input_tokens), '日均 ' + fmtInt(totals.input_tokens / days)],
-    ['Output', fmtInt(totals.output_tokens), '生成输出'],
-    ['缓存 Prompt', fmtInt(totals.cached_input_tokens), '命中率 ' + pct(totals.cached_input_tokens, totals.input_tokens)],
-    ['Unsplit', fmtInt(totals.unsplit_tokens), 'total-only 事件'],
+    [t('summary.totalToken'), fmtInt(totals.total_tokens), t('summary.currentRange')],
+    [t('summary.estimatedCost'), fmtMoney(totals.estimated_cost_usd), t('summary.apiPricedOnly')],
+    [t('summary.prompt'), fmtInt(totals.input_tokens), t('summary.dailyAvg', { value: fmtInt(totals.input_tokens / days) })],
+    [t('summary.output'), fmtInt(totals.output_tokens), t('summary.generatedOutput')],
+    [t('summary.cachedPrompt'), fmtInt(totals.cached_input_tokens), t('summary.cacheHitRate', { value: pct(totals.cached_input_tokens, totals.input_tokens) })],
+    [t('summary.unsplit'), fmtInt(totals.unsplit_tokens), t('summary.totalOnlyEvents')],
   ];
   document.getElementById('summaryCards').innerHTML = items.map(([label, value, detail]) => `
     <article class="metric"><span>${label}</span><strong>${value}</strong><small>${detail}</small></article>
@@ -760,8 +948,9 @@ function renderModelChips() {
     const active = state.selectedModels.size === 0 || state.selectedModels.has(key);
     return `<button type="button" class="chip ${active ? 'active' : ''}" data-model="${escapeHtml(key)}">${escapeHtml(key)} · ${fmtInt(row.total_tokens)}</button>`;
   }).join('');
-  const label = state.selectedModels.size === 0 ? '当前显示全部模型。' : `当前显示 ${state.selectedModels.size} 个模型。`;
-  document.getElementById('filterHint').textContent = `${label} 时间范围：最近 ${state.range} 天。`;
+  document.getElementById('filterHint').textContent = state.selectedModels.size === 0
+    ? t('filters.hintAll', { range: state.range })
+    : t('filters.hintSelected', { count: state.selectedModels.size, range: state.range });
 }
 
 function lineChart(rows, key, options = {}) {
@@ -769,7 +958,7 @@ function lineChart(rows, key, options = {}) {
   const color = options.color || '#1b365d';
   const values = rows.map(row => Number(row[key] || 0));
   const max = Math.max(...values, 0);
-  if (!rows.length || max <= 0) return '<p class="empty">暂无记录。</p>';
+  if (!rows.length || max <= 0) return `<p class="empty">${t('empty')}</p>`;
   const w = 760, h = 280, left = 62, right = 22, top = 22, bottom = 52;
   const cw = w - left - right, ch = h - top - bottom;
   const points = rows.map((row, idx) => {
@@ -794,7 +983,7 @@ function barChart(rows, key, options = {}) {
   const color = options.color || '#b56b35';
   const values = rows.map(row => Number(row[key] || 0));
   const max = Math.max(...values, 0);
-  if (!rows.length || max <= 0) return '<p class="empty">暂无记录。</p>';
+  if (!rows.length || max <= 0) return `<p class="empty">${t('empty')}</p>`;
   const w = 760, h = 280, left = 62, right = 22, top = 22, bottom = 52;
   const cw = w - left - right, ch = h - top - bottom;
   const gap = 7;
@@ -815,7 +1004,7 @@ function barChart(rows, key, options = {}) {
 
 function multiLineChart(rows, series) {
   const max = Math.max(...series.flatMap(item => rows.map(row => Number(row[item.key] || 0))), 0);
-  if (!rows.length || max <= 0) return '<p class="empty">暂无记录。</p>';
+  if (!rows.length || max <= 0) return `<p class="empty">${t('empty')}</p>`;
   const w = 760, h = 280, left = 62, right = 22, top = 22, bottom = 62;
   const cw = w - left - right, ch = h - top - bottom;
   const legend = `<div class="legend">${series.map(item => `<span><i style="background:${item.color}"></i>${item.label}</span>`).join('')}</div>`;
@@ -837,7 +1026,7 @@ function multiLineChart(rows, series) {
 }
 
 function stackedModelTrend(rows, models) {
-  if (!rows.length || !models.length) return '<p class="empty">暂无记录。</p>';
+  if (!rows.length || !models.length) return `<p class="empty">${t('empty')}</p>`;
   const byDateModel = new Map();
   filteredRows().forEach(row => {
     const model = row.model_label || 'Unknown';
@@ -862,7 +1051,7 @@ function stackedModelTrend(rows, models) {
 function donut(rows, labelKey, valueKey) {
   const visible = rows.filter(row => Number(row[valueKey] || 0) > 0).slice(0, 8);
   const total = visible.reduce((sum, row) => sum + Number(row[valueKey] || 0), 0);
-  if (total <= 0) return '<p class="empty">暂无记录。</p>';
+  if (total <= 0) return `<p class="empty">${t('empty')}</p>`;
   let cursor = 0;
   const stops = visible.map((row, idx) => {
     const pctValue = Number(row[valueKey] || 0) / total * 100;
@@ -872,7 +1061,7 @@ function donut(rows, labelKey, valueKey) {
     return stop;
   });
   return `<div class="donut-wrap">
-    <div class="donut" style="background: conic-gradient(${stops.join(', ')});" ${tooltipAttr(`总量: ${fmtInt(total)}`)}><span>${fmtInt(total)}</span></div>
+    <div class="donut" style="background: conic-gradient(${stops.join(', ')});" ${tooltipAttr(`${t('chart.total')}: ${fmtInt(total)}`)}><span>${fmtInt(total)}</span></div>
     <ul class="share-list">${visible.map((row, idx) => `<li ${tooltipAttr(`${row[labelKey] || row.key}: ${fmtInt(row[valueKey])} · ${pct(Number(row[valueKey] || 0), total)}`)}><span><i style="background:${COLORS[idx % COLORS.length]}"></i>${escapeHtml(row[labelKey] || row.key)}</span><strong>${fmtInt(row[valueKey])}</strong></li>`).join('')}</ul>
   </div>`;
 }
@@ -880,7 +1069,7 @@ function donut(rows, labelKey, valueKey) {
 function rankedBars(rows, labelKey, valueKey, limit = 8) {
   const visible = rows.filter(row => Number(row[valueKey] || 0) > 0).slice(0, limit);
   const max = Math.max(...visible.map(row => Number(row[valueKey] || 0)), 0);
-  if (max <= 0) return '<p class="empty">暂无记录。</p>';
+  if (max <= 0) return `<p class="empty">${t('empty')}</p>`;
   return `<ul class="rank-list">${visible.map((row, idx) => {
     const width = Number(row[valueKey] || 0) / max * 100;
     return `<li class="rank-row" ${tooltipAttr(`${row[labelKey] || row.key}: ${fmtInt(row[valueKey])}`)}><span title="${escapeHtml(row[labelKey] || row.key)}">${escapeHtml(row[labelKey] || row.key)}</span><div><i style="width:${width.toFixed(2)}%; background:${COLORS[idx % COLORS.length]}"></i></div><strong>${fmtInt(row[valueKey])}</strong></li>`;
@@ -888,9 +1077,9 @@ function rankedBars(rows, labelKey, valueKey, limit = 8) {
 }
 
 function dailyTable(rows) {
-  if (!rows.length) return '<p class="empty">暂无记录。</p>';
+  if (!rows.length) return `<p class="empty">${t('empty')}</p>`;
   return `<div class="table-wrap"><table>
-    <thead><tr><th>日期</th><th>总量</th><th>预估费用</th><th>Prompt</th><th>Output</th><th>缓存 Prompt</th><th>Reasoning</th><th>Unsplit</th><th>记录</th></tr></thead>
+    <thead><tr><th>${t('table.date')}</th><th>${t('table.total')}</th><th>${t('table.estimatedCost')}</th><th>${t('table.prompt')}</th><th>${t('table.output')}</th><th>${t('table.cachedPrompt')}</th><th>${t('table.reasoning')}</th><th>${t('table.unsplit')}</th><th>${t('table.records')}</th></tr></thead>
     <tbody>${[...rows].reverse().map(row => `<tr>
       <td>${escapeHtml(row.local_date || row.key)}</td>
       <td>${fmtInt(row.total_tokens)}</td>
@@ -961,20 +1150,20 @@ function renderDashboard() {
 
   renderCards(rows);
   renderModelChips();
-  document.getElementById('totalTrend').innerHTML = lineChart(daily, 'total_tokens', { unit: 'tokens', color: '#1b365d', label: '总 Token' });
-  document.getElementById('costTrend').innerHTML = barChart(daily, 'estimated_cost_usd', { unit: '$', color: '#b56b35', label: '预估费用' });
+  document.getElementById('totalTrend').innerHTML = lineChart(daily, 'total_tokens', { unit: 'tokens', color: '#1b365d', label: t('chart.totalToken') });
+  document.getElementById('costTrend').innerHTML = barChart(daily, 'estimated_cost_usd', { unit: '$', color: '#b56b35', label: t('chart.estimatedCost') });
   document.getElementById('promptTrend').innerHTML = multiLineChart(daily, [
-    { label: 'Prompt', key: 'input_tokens', color: '#1b365d' },
-    { label: '缓存 Prompt', key: 'cached_input_tokens', color: '#2f6f55' },
-    { label: 'Output', key: 'output_tokens', color: '#b56b35' },
+    { label: t('summary.prompt'), key: 'input_tokens', color: '#1b365d' },
+    { label: t('summary.cachedPrompt'), key: 'cached_input_tokens', color: '#2f6f55' },
+    { label: t('summary.output'), key: 'output_tokens', color: '#b56b35' },
   ]);
   const cacheRows = daily.map(row => ({ ...row, cache_rate: row.input_tokens ? row.cached_input_tokens / row.input_tokens * 100 : 0 }));
-  document.getElementById('cacheTrend').innerHTML = lineChart(cacheRows, 'cache_rate', { unit: '%', color: '#2f6f55', label: '缓存命中率' });
+  document.getElementById('cacheTrend').innerHTML = lineChart(cacheRows, 'cache_rate', { unit: '%', color: '#2f6f55', label: t('chart.cacheHitRate') });
   document.getElementById('modelRank').innerHTML = rankedBars(models, 'key', 'total_tokens', 8);
   document.getElementById('modelTrend').innerHTML = stackedModelTrend(daily, modelNames);
   document.getElementById('terminalShare').innerHTML = donut(terminals, 'key', 'total_tokens');
   document.getElementById('appRank').innerHTML = rankedBars(apps, 'key', 'total_tokens', 8);
-  document.getElementById('recordTrend').innerHTML = barChart(daily, 'records', { unit: 'tokens', color: '#a38635', label: '记录数' });
+  document.getElementById('recordTrend').innerHTML = barChart(daily, 'records', { unit: 'tokens', color: '#a38635', label: t('chart.records') });
   document.getElementById('unsplitTrend').innerHTML = lineChart(daily, 'unsplit_tokens', { unit: 'tokens', color: '#9b5864', label: 'Unsplit' });
   document.getElementById('dailyTable').innerHTML = dailyTable(daily);
 }
@@ -1042,6 +1231,16 @@ document.addEventListener('click', event => {
   }
   if (chartTooltipPinned) hideChartTooltip();
 
+  const languageButton = event.target.closest('#languageToggle');
+  if (languageButton) {
+    state.lang = state.lang === 'en' ? 'zh' : 'en';
+    try {
+      localStorage.setItem(LANGUAGE_KEY, state.lang);
+    } catch {}
+    applyLanguage();
+    return;
+  }
+
   const rangeButton = event.target.closest('[data-range]');
   if (rangeButton) {
     state.range = Number(rangeButton.dataset.range);
@@ -1076,11 +1275,11 @@ document.getElementById('rescanButton').addEventListener('click', async () => {
   const command = window.TOKKIT_SCAN_COMMAND || 'tok scan all && tok html month open';
   try {
     await navigator.clipboard.writeText(command);
-    showToast(`当前是静态 HTML，浏览器不能直接执行本地命令。已复制：${command}`);
+    showToast(t('toast.copySuccess', { command }));
   } catch {
-    showToast(`当前是静态 HTML，请在终端执行：${command}`);
+    showToast(t('toast.copyFallback', { command }));
   }
 });
 
-renderDashboard();
+applyLanguage();
 """
