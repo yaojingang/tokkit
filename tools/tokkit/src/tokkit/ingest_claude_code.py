@@ -4,10 +4,16 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .db import UsageRecord, upsert_usage_record
+from .db import (
+    UsageRecord,
+    get_file_scan_state,
+    upsert_file_scan_state,
+    upsert_usage_record,
+)
 from .utils import local_date_for
 
 
@@ -76,10 +82,9 @@ def scan_claude_code(
     tz: ZoneInfo,
 ) -> ScanStats:
     stats = ScanStats()
-    conn.execute("DELETE FROM usage_records WHERE app = 'claude-code'")
     for session_file in _iter_session_files(claude_home):
-        stats.files_scanned += 1
-        _scan_session_file(conn, session_file, claude_home=claude_home, tz=tz, stats=stats)
+        if _scan_session_file(conn, session_file, claude_home=claude_home, tz=tz, stats=stats):
+            stats.files_scanned += 1
     conn.commit()
     return stats
 
@@ -91,14 +96,52 @@ def _scan_session_file(
     claude_home: Path,
     tz: ZoneInfo,
     stats: ScanStats,
-) -> None:
+) -> bool:
     session_id = session_file.stem
     fallback_entrypoint = _entrypoint_for_session(claude_home, session_id)
+    try:
+        stat = session_file.stat()
+    except OSError:
+        return False
+
+    state_key = _state_key_for_file("claude-code", session_file)
+    previous = get_file_scan_state(conn, state_key)
+    start_offset = 0
+    full_reset = True
+    if previous is not None:
+        previous_size = int(previous["file_size"] or 0)
+        previous_mtime_ns = int(previous["mtime_ns"] or 0)
+        previous_offset = int(previous["offset"] or 0)
+        previous_entrypoint = _state_entrypoint(previous)
+        if (
+            previous_size == int(stat.st_size)
+            and previous_mtime_ns == int(stat.st_mtime_ns)
+            and previous_entrypoint == fallback_entrypoint
+        ):
+            return False
+        if (
+            int(stat.st_size) > previous_size
+            and previous_offset <= previous_size
+            and previous_entrypoint == fallback_entrypoint
+        ):
+            full_reset = False
+            start_offset = previous_offset
+
+    if full_reset:
+        _delete_claude_session_records(conn, session_id)
+
     best_records: dict[str, dict[str, object]] = {}
+    last_offset = start_offset
 
     try:
         with session_file.open("r", encoding="utf-8") as handle:
-            for line in handle:
+            if start_offset:
+                handle.seek(start_offset)
+            while True:
+                line = handle.readline()
+                if not line:
+                    break
+                last_offset = handle.tell()
                 line = line.strip()
                 if not line:
                     continue
@@ -135,6 +178,7 @@ def _scan_session_file(
 
                 record = {
                     "external_id": message_id,
+                    "record_key": f"{session_id}:{message_id}",
                     "started_at": started_at,
                     "source": source,
                     "model": message.get("model"),
@@ -157,17 +201,26 @@ def _scan_session_file(
                 previous = best_records.get(message_id)
                 if previous is None or _usage_rank(record) >= _usage_rank(previous):
                     best_records[message_id] = record
+            last_offset = handle.tell()
     except OSError:
-        return
+        return False
 
     for record in best_records.values():
+        existing = _existing_claude_record(conn, str(record["record_key"]))
+        if existing is not None and _usage_rank(record) < existing:
+            continue
+        if existing is not None:
+            conn.execute(
+                "DELETE FROM usage_records WHERE app = 'claude-code' AND external_id = ?",
+                (str(record["record_key"]),),
+            )
         stats.records_seen += 1
         upsert_usage_record(
             conn,
             UsageRecord(
                 source=str(record["source"]),
                 app="claude-code",
-                external_id=f"{session_id}:{record['external_id']}",
+                external_id=str(record["record_key"]),
                 started_at=str(record["started_at"]),
                 local_date=local_date_for(str(record["started_at"]), tz),
                 measurement_method="exact",
@@ -182,3 +235,76 @@ def _scan_session_file(
                 metadata=dict(record["metadata"]),
             ),
         )
+
+    upsert_file_scan_state(
+        conn,
+        state_key=state_key,
+        app="claude-code",
+        file_path=str(session_file),
+        offset=last_offset,
+        file_size=int(stat.st_size),
+        mtime_ns=int(stat.st_mtime_ns),
+        last_scanned_at=datetime.now(timezone.utc).isoformat(),
+        metadata={
+            "session_id": session_id,
+            "entrypoint": fallback_entrypoint,
+        },
+    )
+    return True
+
+
+def _state_key_for_file(app: str, session_file: Path) -> str:
+    return f"{app}:file:{session_file.resolve()}"
+
+
+def _state_entrypoint(previous) -> str | None:
+    if previous is None:
+        return None
+    try:
+        metadata = json.loads(previous["metadata_json"] or "{}")
+    except Exception:
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    entrypoint = metadata.get("entrypoint")
+    if isinstance(entrypoint, str) and entrypoint.strip():
+        return entrypoint.strip().lower()
+    return None
+
+
+def _delete_claude_session_records(conn: sqlite3.Connection, session_id: str) -> None:
+    conn.execute(
+        """
+        DELETE FROM usage_records
+        WHERE app = 'claude-code'
+          AND external_id LIKE ?
+        """,
+        (f"{session_id}:%",),
+    )
+
+
+def _existing_claude_record(
+    conn: sqlite3.Connection,
+    external_id: str,
+) -> tuple[int, int, str] | None:
+    row = conn.execute(
+        """
+        SELECT
+            COALESCE(total_tokens, 0) AS total_tokens,
+            COALESCE(output_tokens, 0) AS output_tokens,
+            started_at
+        FROM usage_records
+        WHERE app = 'claude-code'
+          AND external_id = ?
+        ORDER BY total_tokens DESC, output_tokens DESC, started_at DESC
+        LIMIT 1
+        """,
+        (external_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return (
+        int(row["total_tokens"]),
+        int(row["output_tokens"]),
+        str(row["started_at"]),
+    )
