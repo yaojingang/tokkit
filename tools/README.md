@@ -2,6 +2,11 @@
 
 Put each CLI tool in its own directory.
 
+Current tools:
+
+- `tokkit/`: lightweight local-first usage ledger for AI coding tools
+- `yao-scai-cli/`: AI-native disk space scanner and advisor
+
 Suggested pattern:
 
 - `tools/<tool-name>/README.md`

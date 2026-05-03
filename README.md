@@ -13,6 +13,13 @@ This repository is intended for:
 ## Layout
 
 - `tools/`: individual tools or small packages
+- `tools/tokkit`: local-first usage ledger for AI coding tools
+- `tools/yao-scai-cli`: AI-native disk space scanner and advisor
+
+## Current tools
+
+- [`tools/tokkit`](tools/tokkit/README.md): track tokens, cost, models, terminals, and clients across local AI coding workflows
+- [`tools/yao-scai-cli`](tools/yao-scai-cli/README.md): scan large files and folders with CLI/TUI workflows and planned AI cleanup guidance
 
 ## Publishing Rules
 
