@@ -21,6 +21,14 @@ Example: `tok last 7`
 
 ![TokKit range report example](docs/assets/tokkit-range-report-example.svg)
 
+Example: synthetic TUI demo report (5x usage, Claude Code Opus mix boosted)
+
+![TokKit TUI demo screenshot](docs/assets/tokkit-tui-demo-5x-claude-opus.svg)
+
+Example: synthetic CLI demo report using the same data
+
+![TokKit CLI demo screenshot](docs/assets/tokkit-cli-demo-5x-claude-opus.svg)
+
 Example: `tok help`
 
 ![TokKit help example](docs/assets/tokkit-help-example.svg)
