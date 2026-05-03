@@ -30,7 +30,7 @@ from .ingest_trae import scan_trae
 from .ingest_warp import scan_warp
 from .pricing import estimate_cost_usd, iter_price_book, normalize_model_display, resolve_price_book
 from .proxy import ProxyConfig, serve_proxy
-from .scan_planner import record_scan_plan_result, resolve_scan_plan, scan_targets_label
+from .scan_planner import ACTIVE_SCAN_LOOKBACK_DAYS, recent_active_targets, record_scan_plan_result, resolve_scan_plan
 from .utils import DEFAULT_DB_PATH, default_augment_capture_path, default_db_path, default_log_dir, default_report_dir, format_float, format_int, get_timezone, parse_timestamp, resolve_app_home, today_string
 
 
@@ -439,24 +439,34 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_scan_all(conn: sqlite3.Connection, args, tz) -> str:
     plan = resolve_scan_plan(force_full=args.full)
-    active_targets: list[str] = []
+    observed_targets: list[str] = []
     summary_parts: list[str] = [
         f"mode={'full' if plan.full_scan else 'targeted'}",
-        f"scanned={scan_targets_label(plan.targets)}",
+        f"targets={len(plan.targets)}",
     ]
 
     for target in plan.targets:
         active, parts = _run_scan_target(conn, target, args, tz)
         if active:
-            active_targets.append(target)
+            observed_targets.append(target)
         summary_parts.extend(parts)
+
+    persisted_targets = recent_active_targets(
+        conn,
+        tz,
+        lookback_days=ACTIVE_SCAN_LOOKBACK_DAYS,
+    )
+    if not persisted_targets:
+        persisted_targets = tuple(observed_targets)
 
     record_scan_plan_result(
         plan,
-        active_targets=active_targets,
+        active_targets=persisted_targets,
         scanned_targets=plan.targets,
+        lookback_days=ACTIVE_SCAN_LOOKBACK_DAYS,
     )
-    summary_parts.append(f"active={scan_targets_label(active_targets) if active_targets else '-'}")
+    summary_parts.append(f"recent_window_days={ACTIVE_SCAN_LOOKBACK_DAYS}")
+    summary_parts.append(f"active_targets={len(persisted_targets)}")
     return "scan complete: " + " ".join(summary_parts)
 
 

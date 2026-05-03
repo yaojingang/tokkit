@@ -7,7 +7,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .scan_planner import current_scan_session_key, resolve_scan_plan
+from .scan_planner import current_scan_session_key
 from .utils import default_db_path, default_report_dir
 
 
@@ -50,7 +50,7 @@ Scans / 扫描:
   tok scan cursor           Manually scan Cursor estimates now / 立即手动扫描 Cursor 估算数据
   tok scan trae             Manually scan Trae task history now / 立即手动扫描 Trae 任务历史
   tok scan warp             Manually scan Warp now / 立即手动扫描 Warp
-  tok scan all [--full]     Smart scan all active targets now / 智能扫描当前活跃目标；加 --full 可强制全量刷新
+  tok scan all [--full]     Bootstrap once, then keep scanning recent active clients / 首次全量扫描，之后固定扫描近 30 天有记录的客户端；加 --full 可重建
 
 JSON output / JSON 输出:
   tok json today            Show today's report as JSON / 以 JSON 输出今天的报表
@@ -347,8 +347,7 @@ def _resolve_scan_target(target: str) -> tuple[list[str] | None, str]:
         "warp": (["scan-warp"], "Warp"),
     }
     if target == "all":
-        plan = resolve_scan_plan()
-        return ["scan-all"], plan.label
+        return ["scan-all"], "usage data / 正在统计中"
     return mapping.get(target, (None, ""))
 
 

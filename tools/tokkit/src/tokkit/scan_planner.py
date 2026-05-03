@@ -4,11 +4,13 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from .utils import json_dumps, resolve_app_home
+import sqlite3
+
+from .utils import json_dumps, resolve_app_home, today_string
 
 
 ALL_SCAN_TARGETS: tuple[str, ...] = (
@@ -50,7 +52,8 @@ SCAN_TARGET_COMMANDS: dict[str, list[str]] = {
 }
 
 
-_STATE_FILE_NAME = "scan-sessions.json"
+ACTIVE_SCAN_LOOKBACK_DAYS = 30
+_STATE_FILE_NAME = "scan-plan.json"
 _TERMINAL_SESSION_ENV_KEYS = (
     "TERM_SESSION_ID",
     "ITERM_SESSION_ID",
@@ -62,8 +65,6 @@ _TERMINAL_SESSION_ENV_KEYS = (
     "STY",
     "ALACRITTY_WINDOW_ID",
 )
-_MAX_SESSION_AGE = timedelta(days=14)
-_MAX_SESSION_COUNT = 48
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,12 +121,11 @@ def resolve_scan_plan(
     app_home: Path | None = None,
 ) -> ScanPlan:
     effective_session_key = session_key or current_scan_session_key()
-    state = load_scan_sessions_state(app_home=app_home)
-    session = state.get("sessions", {}).get(effective_session_key, {})
-    active_targets = tuple(_normalize_targets(session.get("active_targets", [])))
-    full_scan_completed = bool(session.get("full_scan_completed"))
+    state = load_scan_plan_state(app_home=app_home)
+    active_targets = tuple(_normalize_targets(state.get("active_targets", [])))
+    bootstrap_completed = bool(state.get("bootstrap_completed"))
 
-    if force_full or not full_scan_completed or not active_targets:
+    if force_full or not bootstrap_completed or not active_targets:
         targets = ALL_SCAN_TARGETS
         full_scan = True
     else:
@@ -140,56 +140,84 @@ def resolve_scan_plan(
     )
 
 
+def recent_active_targets(
+    conn: sqlite3.Connection,
+    tz,
+    *,
+    lookback_days: int = ACTIVE_SCAN_LOOKBACK_DAYS,
+) -> tuple[str, ...]:
+    today = today_string(tz)
+    rows = conn.execute(
+        """
+        SELECT DISTINCT app
+        FROM usage_records
+        WHERE local_date >= date(?, ?)
+          AND (
+              COALESCE(total_tokens, 0) > 0
+              OR COALESCE(input_tokens, 0) > 0
+              OR COALESCE(output_tokens, 0) > 0
+              OR COALESCE(cached_input_tokens, 0) > 0
+              OR COALESCE(reasoning_tokens, 0) > 0
+              OR COALESCE(credits, 0.0) > 0.0
+          )
+        """,
+        (today, f"-{max(lookback_days - 1, 0)} day"),
+    ).fetchall()
+
+    detected = {str(row["app"]).strip() for row in rows if str(row["app"]).strip()}
+    return tuple(target for target in ALL_SCAN_TARGETS if target in detected)
+
+
 def record_scan_plan_result(
     plan: ScanPlan,
     *,
     active_targets: Iterable[str],
     scanned_targets: Iterable[str] | None = None,
     app_home: Path | None = None,
+    lookback_days: int = ACTIVE_SCAN_LOOKBACK_DAYS,
 ) -> None:
-    state = load_scan_sessions_state(app_home=app_home)
-    sessions = state.setdefault("sessions", {})
-    previous = sessions.get(plan.session_key, {})
+    previous = load_scan_plan_state(app_home=app_home)
+    normalized_active_targets = list(_normalize_targets(active_targets))
     now = datetime.now(timezone.utc).isoformat()
-    sessions[plan.session_key] = {
-        "active_targets": list(_normalize_targets(active_targets)),
-        "full_scan_completed": bool(previous.get("full_scan_completed")) or plan.full_scan,
+
+    if plan.full_scan:
+        persisted_targets = normalized_active_targets
+    else:
+        previous_targets = list(_normalize_targets(previous.get("active_targets", [])))
+        persisted_targets = previous_targets or normalized_active_targets
+
+    payload = {
+        "bootstrap_completed": bool(previous.get("bootstrap_completed")) or plan.full_scan,
+        "active_targets": persisted_targets,
+        "lookback_days": int(previous.get("lookback_days") or lookback_days),
         "last_mode": "full" if plan.full_scan else "targeted",
         "last_scan_at": now,
+        "last_session_key": plan.session_key,
         "last_scanned_targets": list(_normalize_targets(scanned_targets or plan.targets)),
     }
-    _prune_sessions(sessions)
-    save_scan_sessions_state(state, app_home=app_home)
+    save_scan_plan_state(payload, app_home=app_home)
 
 
-def load_scan_sessions_state(*, app_home: Path | None = None) -> dict[str, Any]:
-    path = scan_sessions_path(app_home=app_home)
+def load_scan_plan_state(*, app_home: Path | None = None) -> dict[str, Any]:
+    path = scan_plan_path(app_home=app_home)
     if not path.exists():
-        return {"sessions": {}}
+        return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return {"sessions": {}}
+        return {}
     if not isinstance(payload, dict):
-        return {"sessions": {}}
-    sessions = payload.get("sessions")
-    if not isinstance(sessions, dict):
-        return {"sessions": {}}
-    normalized: dict[str, Any] = {}
-    for key, value in sessions.items():
-        if not isinstance(key, str) or not key.strip() or not isinstance(value, dict):
-            continue
-        normalized[key] = value
-    return {"sessions": normalized}
+        return {}
+    return payload
 
 
-def save_scan_sessions_state(state: dict[str, Any], *, app_home: Path | None = None) -> None:
-    path = scan_sessions_path(app_home=app_home)
+def save_scan_plan_state(state: dict[str, Any], *, app_home: Path | None = None) -> None:
+    path = scan_plan_path(app_home=app_home)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json_dumps(state), encoding="utf-8")
 
 
-def scan_sessions_path(*, app_home: Path | None = None) -> Path:
+def scan_plan_path(*, app_home: Path | None = None) -> Path:
     return (app_home or resolve_app_home()) / _STATE_FILE_NAME
 
 
@@ -214,39 +242,3 @@ def _current_tty() -> str | None:
         except OSError:
             continue
     return None
-
-
-def _prune_sessions(sessions: dict[str, Any]) -> None:
-    now = datetime.now(timezone.utc)
-    stale_keys: list[str] = []
-    ranked: list[tuple[datetime, str]] = []
-    for key, value in sessions.items():
-        last_scan_at = _parse_timestamp(value.get("last_scan_at"))
-        if last_scan_at is None or now - last_scan_at > _MAX_SESSION_AGE:
-            stale_keys.append(key)
-            continue
-        ranked.append((last_scan_at, key))
-
-    for key in stale_keys:
-        sessions.pop(key, None)
-
-    if len(ranked) <= _MAX_SESSION_COUNT:
-        return
-
-    ranked.sort(reverse=True)
-    keep = {key for _, key in ranked[:_MAX_SESSION_COUNT]}
-    for key in list(sessions):
-        if key not in keep:
-            sessions.pop(key, None)
-
-
-def _parse_timestamp(value: object) -> datetime | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
