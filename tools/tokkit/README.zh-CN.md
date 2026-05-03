@@ -222,10 +222,22 @@ tok html
 tok html week
 tok html last 14
 tok html month
+tok html open
 ```
 
 HTML 报告会生成在 `~/.tokkit/reports/`，是静态文件，可以本地打开、作为
-artifact 分享，或用于演示。
+artifact 分享，或用于演示。普通报表或扫描命令每天首次执行时，也会自动静默生成一份
+最近 30 天 HTML 报告；手动执行 `tok html` 会立即重新生成。
+
+自动 HTML 报告可以通过环境变量调整：
+
+```bash
+TOK_AUTO_HTML_REPORT=0 tok today
+TOK_AUTO_HTML_LAST_DAYS=7 tok today
+```
+
+- `TOK_AUTO_HTML_REPORT=0`：关闭每日首次自动生成。
+- `TOK_AUTO_HTML_LAST_DAYS=7`：把自动报告窗口改为最近 7 天，默认是 30 天。
 
 报表目录辅助命令：
 

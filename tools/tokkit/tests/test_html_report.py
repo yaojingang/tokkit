@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import sqlite3
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -13,7 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from tokkit.cli import render_html_report
 from tokkit.db import UsageRecord, init_db, upsert_usage_record
-from tokkit.tok import _run_html_command
+from tokkit.tok import _refresh_daily_html_report_if_needed, _run_html_command, _run_scan_command
 
 
 class HtmlReportTests(unittest.TestCase):
@@ -85,6 +88,56 @@ class HtmlReportTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         run_report.assert_called_once_with(["report-html", "--output", "/tmp/report.html", "--last", "14"])
+
+    def test_daily_html_report_generates_once_without_stdout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_dir = Path(tmp_dir)
+            expected_path = report_dir / "tokkit-last-14-2026-05-03.html"
+            calls: list[list[str]] = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                stdout = kwargs["stdout"]
+                stdout.write("wrote HTML report to hidden path\n")
+                expected_path.write_text("<!doctype html>", encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0)
+
+            with (
+                patch.dict(os.environ, {"TOK_AUTO_HTML_REPORT": "1", "TOK_AUTO_HTML_LAST_DAYS": "14"}),
+                patch("tokkit.tok._report_dir", return_value=report_dir),
+                patch("tokkit.tok._auto_html_today_string", return_value="2026-05-03"),
+                patch("tokkit.tok.subprocess.run", side_effect=fake_run),
+            ):
+                first_status = _refresh_daily_html_report_if_needed()
+                second_status = _refresh_daily_html_report_if_needed()
+
+        self.assertEqual(first_status, 0)
+        self.assertEqual(second_status, 0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("report-html", calls[0])
+        self.assertIn("--last", calls[0])
+        self.assertIn("14", calls[0])
+        self.assertIn("--output", calls[0])
+        self.assertIn(str(expected_path), calls[0])
+
+    def test_daily_html_report_can_be_disabled(self) -> None:
+        with patch.dict(os.environ, {"TOK_AUTO_HTML_REPORT": "0"}):
+            with patch("tokkit.tok.subprocess.run") as run:
+                status = _refresh_daily_html_report_if_needed()
+
+        self.assertEqual(status, 0)
+        run.assert_not_called()
+
+    def test_manual_scan_refreshes_daily_html_after_success(self) -> None:
+        with (
+            patch("tokkit.tok._run_tokkit", return_value=0) as run_tokkit,
+            patch("tokkit.tok._refresh_daily_html_report_if_needed", return_value=0) as refresh,
+        ):
+            status = _run_scan_command(["codex"])
+
+        self.assertEqual(status, 0)
+        run_tokkit.assert_called_once_with(["scan-codex"])
+        refresh.assert_called_once_with()
 
 
 if __name__ == "__main__":

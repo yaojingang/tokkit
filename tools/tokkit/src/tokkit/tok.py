@@ -5,7 +5,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .scan_planner import current_scan_session_key
 from .utils import default_db_path, default_report_dir
@@ -28,6 +30,7 @@ Reports / 报表:
   tok html                  Generate an HTML report for last 30 days / 生成最近 30 天 HTML 报告
   tok html week             Generate an HTML report for last 7 days / 生成最近 7 天 HTML 报告
   tok html last 14          Generate an HTML report for last N days / 生成最近 N 天 HTML 报告
+  tok html open             Generate and open the HTML report / 生成并打开 HTML 报告
   tok doctor                Inspect local setup and client coverage / 检查本地配置和客户端覆盖情况
   tok setup                 Inspect or apply common setup steps / 检查或执行常见安装配置步骤
   tok budget                Show budget status for today/week/month / 查看今天、本周、本月预算状态
@@ -81,6 +84,12 @@ Auto scan / 自动扫描:
   report commands auto-scan before rendering / 报表命令会先自动扫描再输出
   TOK_AUTO_SCAN_BEFORE_REPORTS=0               disable auto scan / 关闭自动扫描
   TOK_AUTO_SCAN_TARGET=all|codex|claude-code|augment|chatgpt|copilot|warp|codebuddy|cursor|trae  choose scan target / 指定扫描目标
+
+Auto HTML report / 自动 HTML 报告:
+  first report or scan command each day silently writes ~/.tokkit/reports/tokkit-last-30-YYYY-MM-DD.html
+  每天首次执行报表或扫描命令时，会静默生成最近 30 天 HTML 报告
+  TOK_AUTO_HTML_REPORT=0       disable daily HTML generation / 关闭每日自动 HTML
+  TOK_AUTO_HTML_LAST_DAYS=30   choose auto report window / 指定自动报告天数
 """
 
 
@@ -140,12 +149,12 @@ def _run_scan_command(args: list[str]) -> int:
         command = ["scan-chatgpt-export"]
         if len(args) > 1:
             command.extend(["--export-file", args[1]])
-        return _run_tokkit(command)
+        return _run_scan_and_refresh_report(command)
     if target == "copilot":
         command = ["scan-copilot"]
         if len(args) > 1:
             command.extend(args[1:])
-        return _run_tokkit(command)
+        return _run_scan_and_refresh_report(command)
     mapping = {
         "codex": ["scan-codex"],
         "claude-code": ["scan-claude-code"],
@@ -163,7 +172,7 @@ def _run_scan_command(args: list[str]) -> int:
         return 1
     if target == "all" and len(args) > 1:
         command.extend(args[1:])
-    return _run_tokkit(command)
+    return _run_scan_and_refresh_report(command)
 
 
 def _run_clients_command(args: list[str]) -> int:
@@ -316,11 +325,76 @@ def _run_augment_command(args: list[str]) -> int:
     return 1
 
 
+def _run_scan_and_refresh_report(args: list[str]) -> int:
+    status = _run_tokkit(args)
+    if status == 0:
+        _refresh_daily_html_report_if_needed()
+    return status
+
+
 def _run_report(args: list[str]) -> int:
     auto_scan_status = _run_auto_scan_if_needed()
     if auto_scan_status != 0:
         return auto_scan_status
+    if args[:1] != ["report-html"]:
+        _refresh_daily_html_report_if_needed()
     return _run_tokkit(args)
+
+
+def _refresh_daily_html_report_if_needed() -> int:
+    if os.environ.get("TOK_AUTO_HTML_REPORT", "1") != "1":
+        return 0
+
+    days = _auto_html_last_days()
+    output_path = _auto_html_report_path(days)
+    if output_path.exists():
+        return 0
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    command = ["report-html", "--last", str(days), "--output", str(output_path)]
+    with tempfile.NamedTemporaryFile(prefix="tok-auto-html.", suffix=".log", delete=False) as tmp:
+        temp_path = Path(tmp.name)
+
+    try:
+        with temp_path.open("w", encoding="utf-8") as handle:
+            proc = subprocess.run(
+                _tokkit_command(command),
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=_tokkit_env(),
+                check=False,
+            )
+        if proc.returncode != 0:
+            print(f"tok: daily HTML report generation failed: {output_path}", file=sys.stderr)
+            output = temp_path.read_text(encoding="utf-8")
+            if output.strip():
+                print(output, file=sys.stderr, end="" if output.endswith("\n") else "\n")
+        return 0
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+def _auto_html_last_days() -> int:
+    value = os.environ.get("TOK_AUTO_HTML_LAST_DAYS", "30")
+    if _is_positive_int(value):
+        return int(value)
+    print(f"tok: invalid TOK_AUTO_HTML_LAST_DAYS='{value}', using 30", file=sys.stderr)
+    return 30
+
+
+def _auto_html_report_path(last_days: int) -> Path:
+    return _report_dir() / f"tokkit-last-{last_days}-{_auto_html_today_string()}.html"
+
+
+def _auto_html_today_string() -> str:
+    timezone = os.environ.get("TOKKIT_TIMEZONE", os.environ.get("TOKSTAT_TIMEZONE"))
+    if timezone:
+        try:
+            return datetime.now(ZoneInfo(timezone)).date().isoformat()
+        except ZoneInfoNotFoundError:
+            print(f"tok: unknown timezone '{timezone}', using local timezone", file=sys.stderr)
+    return datetime.now().astimezone().date().isoformat()
 
 
 def _run_auto_scan_if_needed() -> int:

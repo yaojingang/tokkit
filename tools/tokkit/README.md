@@ -229,10 +229,25 @@ tok html
 tok html week
 tok html last 14
 tok html month
+tok html open
 ```
 
 Generated HTML reports are static files under `~/.tokkit/reports/`. They can be
-opened locally, shared as artifacts, or used as a starting point for demos.
+opened locally, shared as artifacts, or used as a starting point for demos. The
+first regular report or scan command each day also writes a silent last-30-days
+HTML report automatically. Run `tok html` when you want to regenerate it
+manually.
+
+Daily automatic HTML generation can be configured with environment variables:
+
+```bash
+TOK_AUTO_HTML_REPORT=0 tok today
+TOK_AUTO_HTML_LAST_DAYS=7 tok today
+```
+
+- `TOK_AUTO_HTML_REPORT=0`: disable daily automatic HTML generation.
+- `TOK_AUTO_HTML_LAST_DAYS=7`: use a 7-day window for the automatic report
+  instead of the default 30 days.
 
 Report directory helpers:
 
