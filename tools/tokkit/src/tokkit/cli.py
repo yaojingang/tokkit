@@ -668,18 +668,20 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
         key_builder=lambda row: (row["model_label"],),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["model_label"])),
     )
-    by_source = _aggregate_usage_rows(
-        detailed_rows,
-        key_fields=["app", "source", "originator", "model_label"],
-        key_builder=lambda row: (row["app"], row["source"], row.get("originator", ""), row["model_label"]),
-        sort_key=lambda row: (
-            -int(row["total_tokens"]),
-            -float(row["credits"]),
-            str(row["app"]),
-            str(_source_label(row["app"], row["source"], row.get("originator"))),
-            str(row["model_label"]),
-        ),
-    )
+    by_source = None
+    if json_mode:
+        by_source = _aggregate_usage_rows(
+            detailed_rows,
+            key_fields=["app", "source", "originator", "model_label"],
+            key_builder=lambda row: (row["app"], row["source"], row.get("originator", ""), row["model_label"]),
+            sort_key=lambda row: (
+                -int(row["total_tokens"]),
+                -float(row["credits"]),
+                str(row["app"]),
+                str(_source_label(row["app"], row["source"], row.get("originator"))),
+                str(row["model_label"]),
+            ),
+        )
     by_hour = _aggregate_hourly_usage_rows(conn, target_date, tz)
 
     if json_mode:
@@ -691,7 +693,7 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             "by_hour": by_hour,
             "by_terminal": by_terminal,
             "by_model": by_model,
-            "by_source": by_source,
+            "by_source": by_source or [],
         }
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
@@ -837,53 +839,6 @@ def render_daily_report(conn: sqlite3.Connection, target_date: str, *, json_mode
             )
         )
 
-    lines.extend(
-        [
-            "",
-        "By source:",
-        ]
-    )
-    if not by_source:
-        lines.append("  (no records)")
-    else:
-        lines.append(
-            _render_table(
-                headers=[
-                    "App",
-                    "Source",
-                    "Model",
-                    "Method",
-                    "Total",
-                    "Est.$",
-                    "Prompt",
-                    "Output",
-                    "Cached Prompt",
-                    "Reasoning",
-                    "Unsplit",
-                    "Credits",
-                    "Records",
-                ],
-                rows=[
-                    [
-                        row["app"],
-                        _source_label(row["app"], row["source"], row.get("originator")),
-                        row["model_label"],
-                        row["method"],
-                        format_int(row["total_tokens"]),
-                        format_float(row["estimated_cost_usd"]),
-                        format_int(row["input_tokens"]),
-                        format_int(row["output_tokens"]),
-                        format_int(row["cached_input_tokens"]),
-                        format_int(row["reasoning_tokens"]),
-                        format_int(row["unsplit_tokens"]),
-                        format_float(row["credits"]),
-                        str(row["records"]),
-                    ]
-                    for row in by_source
-                ],
-                right_align={4, 5, 6, 7, 8, 9, 10, 11, 12},
-            )
-        )
     return "\n".join(lines)
 
 
@@ -944,18 +899,20 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
         key_builder=lambda row: (row["model_label"],),
         sort_key=lambda row: (-int(row["total_tokens"]), -float(row["credits"]), str(row["model_label"])),
     )
-    rows = _aggregate_usage_rows(
-        detailed_rows,
-        key_fields=["local_date", "app", "source", "originator", "model_label"],
-        key_builder=lambda row: (row["local_date"], row["app"], row["source"], row.get("originator", ""), row["model_label"]),
-        sort_key=lambda row: (
-            -int(str(row["local_date"]).replace("-", "")),
-            -int(row["total_tokens"]),
-            str(row["app"]),
-            str(_source_label(row["app"], row["source"], row.get("originator"))),
-            str(row["model_label"]),
-        ),
-    )
+    rows = None
+    if json_mode:
+        rows = _aggregate_usage_rows(
+            detailed_rows,
+            key_fields=["local_date", "app", "source", "originator", "model_label"],
+            key_builder=lambda row: (row["local_date"], row["app"], row["source"], row.get("originator", ""), row["model_label"]),
+            sort_key=lambda row: (
+                -int(str(row["local_date"]).replace("-", "")),
+                -int(row["total_tokens"]),
+                str(row["app"]),
+                str(_source_label(row["app"], row["source"], row.get("originator"))),
+                str(row["model_label"]),
+            ),
+        )
     if json_mode:
         return json.dumps(
             {
@@ -963,7 +920,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                 "by_date": by_date_rows,
                 "by_terminal": by_terminal,
                 "by_model": by_model,
-                "by_source": rows,
+                "by_source": rows or [],
             },
             ensure_ascii=False,
             indent=2,
@@ -1048,50 +1005,7 @@ def render_range_report(conn: sqlite3.Connection, last_days: int, tz, *, json_mo
                 ],
                 right_align={2, 3, 4, 5, 6, 7, 8, 9, 10},
             ),
-            "",
-            "By source:",
         ]
-    )
-
-    lines.append(
-        _render_table(
-            headers=[
-                "Date",
-                "App",
-                "Source",
-                "Model",
-                "Method",
-                "Total",
-                "Est.$",
-                "Prompt",
-                "Output",
-                "Cached Prompt",
-                "Reasoning",
-                "Unsplit",
-                "Credits",
-                "Records",
-            ],
-            rows=[
-                [
-                    row["local_date"],
-                    row["app"],
-                    _source_label(row["app"], row["source"], row.get("originator")),
-                    row["model_label"],
-                    row["method"],
-                    format_int(row["total_tokens"]),
-                    format_float(row["estimated_cost_usd"]),
-                    format_int(row["input_tokens"]),
-                    format_int(row["output_tokens"]),
-                    format_int(row["cached_input_tokens"]),
-                    format_int(row["reasoning_tokens"]),
-                    format_int(row["unsplit_tokens"]),
-                    format_float(row["credits"]),
-                    str(row["records"]),
-                ]
-                for row in rows
-            ],
-            right_align={5, 6, 7, 8, 9, 10, 11, 12, 13},
-        )
     )
     return "\n".join(lines)
 
