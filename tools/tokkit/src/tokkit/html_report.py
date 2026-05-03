@@ -144,6 +144,7 @@ def _css() -> str:
   --gold: #a38635;
   --rose: #9b5864;
   --ring: #cfc9b8;
+  --module-gap: 16px;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -386,12 +387,12 @@ h1 {
   line-height: 1.25;
 }
 .control-panel {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 .filter-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: var(--module-gap);
   align-items: end;
 }
 .chips {
@@ -417,19 +418,20 @@ h1 {
   display: flex;
   gap: 8px;
 }
-.chart-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
+.chart-grid,
 .wide-grid {
   display: grid;
-  grid-template-columns: minmax(330px, 0.9fr) minmax(0, 1.1fr);
-  gap: 16px;
-  margin-top: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--module-gap);
+  align-items: stretch;
+  margin-top: var(--module-gap);
+}
+.chart-grid > .panel,
+.wide-grid > .panel {
+  height: 100%;
 }
 .wide-panel {
-  margin-top: 16px;
+  margin-top: var(--module-gap);
 }
 .chart {
   width: 100%;
