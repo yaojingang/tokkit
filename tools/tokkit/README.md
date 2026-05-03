@@ -17,21 +17,20 @@ In one sentence:
   coding tool usage into one honest, terminal-first account of tokens and
   cost.
 
-Example: `tok last 7`
+## Examples
 
-![TokKit range report example](docs/assets/tokkit-range-report-example.svg)
+These examples use the same synthetic demo dataset: source report totals scaled
+5x, with the Claude Code Opus 4.6 / 4.7 mix boosted.
 
-Example: synthetic TUI demo report (5x usage, Claude Code Opus mix boosted)
+[Open the interactive HTML demo report](docs/assets/tokkit-demo-5x-claude-opus.html)
+
+TUI dashboard:
 
 ![TokKit TUI demo screenshot](docs/assets/tokkit-tui-demo-5x-claude-opus.svg)
 
-Example: synthetic CLI demo report using the same data
+CLI report:
 
 ![TokKit CLI demo screenshot](docs/assets/tokkit-cli-demo-5x-claude-opus.svg)
-
-Example: `tok help`
-
-![TokKit help example](docs/assets/tokkit-help-example.svg)
 
 ## Why it is different
 
