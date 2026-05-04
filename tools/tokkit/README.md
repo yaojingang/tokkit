@@ -281,7 +281,10 @@ Core token fields:
 - `Cached Prompt`: prompt tokens that were served from cache.
 - `Reasoning`: reasoning tokens when the provider exposes them.
 - `Unsplit`: totals that could not be safely split into prompt/output fields.
-- `Est.$`: local estimated API cost for priced records.
+- `Est.$`: local API cost estimate calculated from model pricing, prompt,
+  cached prompt, and output tokens. OpenAI cached tokens are usually included in
+  input totals, while Claude/Anthropic cache-read tokens are separate billable
+  tokens; TokKit prices those provider semantics differently.
 - `Credits`: vendor credit units, kept separate from dollars.
 - `Records`: number of normalized usage records behind the row.
 

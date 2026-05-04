@@ -65,6 +65,7 @@ BUILTIN_PRICE_BOOK: dict[str, ModelPrice] = {
     "Claude Sonnet 4.6": ModelPrice(3.00, 0.30, 15.00),
     "Claude Sonnet 4.5": ModelPrice(3.00, 0.30, 15.00),
     "Claude Haiku 4.5": ModelPrice(1.00, 0.10, 5.00),
+    "Claude Opus 4.7": ModelPrice(5.00, 0.50, 25.00),
     "Claude Opus 4.6": ModelPrice(5.00, 0.50, 25.00),
     "Claude Opus 4.5": ModelPrice(5.00, 0.50, 25.00),
     "Claude Sonnet 4": ModelPrice(3.00, 0.30, 15.00),
@@ -164,8 +165,12 @@ def estimate_cost_usd(
         return None
     pricing = profile.pricing
 
-    cached_billable = min(cached_input, total_input)
-    uncached_input = max(total_input - cached_billable, 0)
+    if _uses_disjoint_cached_input_tokens(normalized, provider):
+        uncached_input = total_input
+        cached_billable = cached_input
+    else:
+        cached_billable = min(cached_input, total_input)
+        uncached_input = max(total_input - cached_billable, 0)
     cached_rate = pricing.cached_input_per_million
     if cached_rate is None:
         cached_rate = pricing.input_per_million
@@ -176,6 +181,13 @@ def estimate_cost_usd(
         + (total_output / 1_000_000) * pricing.output_per_million
     )
     return round(estimate, 8)
+
+
+def _uses_disjoint_cached_input_tokens(model_label: str, provider: str | None) -> bool:
+    provider_value = (provider or "").strip().lower()
+    if provider_value in {"anthropic", "claude"}:
+        return True
+    return model_label.startswith("Claude ")
 
 
 def _load_override_profiles(path: Path) -> dict[str, ModelPrice]:

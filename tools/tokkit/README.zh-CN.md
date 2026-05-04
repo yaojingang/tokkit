@@ -270,7 +270,9 @@ tokkit serve-proxy --host 127.0.0.1 --port 8765 --upstream-base-url https://api.
 - `Cached Prompt`：命中缓存的 Prompt token。
 - `Reasoning`：供应商暴露的 reasoning token。
 - `Unsplit`：只能拿到总量、无法安全拆成 Prompt/Output 的 token。
-- `Est.$`：本地估算的 API 成本。
+- `Est.$`：基于模型价格、Prompt、Cached Prompt 和 Output 本地估算的 API
+  成本；OpenAI 的 cached tokens 通常包含在 input 内，Claude/Anthropic 的
+  cache read tokens 通常是独立 token，TokKit 会按不同供应商语义分别计价。
 - `Credits`：供应商 credits，和美元分开保留。
 - `Records`：当前行背后的归一化记录数量。
 

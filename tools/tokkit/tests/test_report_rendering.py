@@ -105,6 +105,36 @@ class ReportRenderingTests(unittest.TestCase):
         self.assertEqual(payload["by_source"][0]["total_tokens"], 151802)
         self.assertEqual(payload["by_date"][0]["unsplit_tokens"], 150702)
 
+    def test_range_report_prices_claude_cache_reads_as_disjoint_tokens(self) -> None:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        init_db(conn)
+        tz = ZoneInfo("Asia/Shanghai")
+        target_date = datetime.now(tz).date().isoformat()
+        upsert_usage_record(
+            conn,
+            UsageRecord(
+                source="claude-code:cli",
+                app="claude-code",
+                external_id=f"claude-1:{target_date}T03:00:00+08:00",
+                started_at=f"{target_date}T03:00:00+08:00",
+                local_date=target_date,
+                model="claude-opus-4-7-20260416",
+                input_tokens=1_000_000,
+                output_tokens=500_000,
+                cached_input_tokens=2_000_000,
+                total_tokens=3_500_000,
+                metadata={"model_provider": "anthropic"},
+            ),
+        )
+        conn.commit()
+
+        payload = json.loads(render_range_report(conn, 7, tz, json_mode=True))
+
+        self.assertEqual(payload["by_model"][0]["model_label"], "Claude Opus 4.7")
+        self.assertEqual(payload["by_model"][0]["estimated_cost_usd"], 18.5)
+        self.assertEqual(payload["by_date"][0]["estimated_cost_usd"], 18.5)
+
 
 if __name__ == "__main__":
     unittest.main()

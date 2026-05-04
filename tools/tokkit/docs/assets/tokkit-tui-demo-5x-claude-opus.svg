@@ -19,7 +19,7 @@
   <text x="68" y="386" fill="#64748B" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="17">5x synthetic report</text>
   <rect x="539" y="258" width="475" height="152" rx="24" fill="#F8FAFC"/>
   <text x="565" y="301" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="750">Estimated cost</text>
-  <text x="565" y="354" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="40" font-weight="850">$23,668.08</text>
+  <text x="565" y="354" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="40" font-weight="850">$47,763.02</text>
   <text x="565" y="386" fill="#64748B" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="17">API-priced records</text>
   <rect x="1036" y="258" width="475" height="152" rx="24" fill="#F8FAFC"/>
   <text x="1062" y="301" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="750">Prompt tokens</text>
@@ -58,7 +58,7 @@
   <text x="1050" y="531" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">Codex Desktop</text>
   <rect x="1280" y="508" width="568" height="20" rx="10" fill="#2A3140"/>
   <rect x="1280" y="508" width="548" height="20" rx="10" fill="#34D399"/>
-  <text x="1968" y="531" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">14.45B</text>
+  <text x="1968" y="531" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">14.40B</text>
   <text x="1050" y="574" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">claude-code</text>
   <rect x="1280" y="551" width="568" height="20" rx="10" fill="#2A3140"/>
   <rect x="1280" y="551" width="338" height="20" rx="10" fill="#F59E0B"/>
@@ -78,7 +78,7 @@
   <text x="1050" y="746" fill="#E5E7EB" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700">VS Code</text>
   <rect x="1280" y="723" width="568" height="20" rx="10" fill="#2A3140"/>
   <rect x="1280" y="723" width="0" height="20" rx="10" fill="#F97316"/>
-  <text x="1968" y="746" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">327.6K</text>
+  <text x="1968" y="746" fill="#F8FAFC" font-family="SFMono-Regular, Menlo, Monaco, Consolas, PingFang SC, Noto Sans Mono CJK SC, monospace" font-size="18" text-anchor="end">51.6M</text>
   <rect x="42" y="850" width="1264" height="360" rx="24" fill="#171C26" stroke="#2A3140" stroke-width="2"/><text x="70" y="892" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, PingFang SC, Microsoft YaHei, sans-serif" font-size="24" font-weight="800">14-day activity</text>
   <line x1="92" y1="925.0" x2="1234" y2="925.0" stroke="#2A3140" stroke-width="2"/>
   <line x1="92" y1="998.3" x2="1234" y2="998.3" stroke="#2A3140" stroke-width="2"/>

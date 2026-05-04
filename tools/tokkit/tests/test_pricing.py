@@ -62,6 +62,32 @@ class EstimateCostUsdTests(unittest.TestCase):
             8.435,
         )
 
+    def test_estimates_claude_disjoint_cache_reads(self) -> None:
+        self.assertEqual(
+            estimate_cost_usd(
+                model="claude-opus-4-6",
+                provider="anthropic",
+                measurement_method="exact",
+                input_tokens=1_000_000,
+                cached_input_tokens=2_000_000,
+                output_tokens=500_000,
+            ),
+            18.5,
+        )
+
+    def test_estimates_claude_opus_4_7_cost(self) -> None:
+        self.assertEqual(
+            estimate_cost_usd(
+                model="claude-opus-4-7-20260416",
+                provider="anthropic",
+                measurement_method="exact",
+                input_tokens=1_000_000,
+                cached_input_tokens=2_000_000,
+                output_tokens=500_000,
+            ),
+            18.5,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
